@@ -11,6 +11,7 @@ import (
 	"github.com/PaulSonOfLars/gotgbot/v2/ext/handlers"
 
 	"twitterx-bot/internal/logger"
+	"twitterx-bot/internal/tweet"
 	"twitterx-bot/internal/twitterxapi"
 )
 
@@ -70,7 +71,7 @@ func (h *Handlers) inlineQuery(b *gotgbot.Bot, ctx *ext.Context) error {
 	reqCtx, cancel := context.WithTimeout(context.Background(), inlineQueryTimeout)
 	defer cancel()
 
-	tweet, err := h.api.GetTweet(reqCtx, username, tweetID)
+	tw, err := h.api.GetTweet(reqCtx, username, tweetID)
 	if err != nil {
 		h.log.Error("failed to fetch tweet %s for %s: %v", tweetID, username, err)
 		_, answerErr := ctx.InlineQuery.Answer(b, nil, &gotgbot.AnswerInlineQueryOpts{
@@ -83,7 +84,7 @@ func (h *Handlers) inlineQuery(b *gotgbot.Bot, ctx *ext.Context) error {
 		return nil
 	}
 
-	result, ok := buildInlineResult(tweet, tweetID)
+	result, ok := tweet.BuildInlineResult(tw, tweetID)
 	if !ok {
 		h.log.Error("no suitable inline result for tweet %s", tweetID)
 		_, answerErr := ctx.InlineQuery.Answer(b, nil, &gotgbot.AnswerInlineQueryOpts{
@@ -122,11 +123,11 @@ func (h *Handlers) messageHandler(b *gotgbot.Bot, ctx *ext.Context) error {
 	reqCtx, cancel := context.WithTimeout(context.Background(), inlineQueryTimeout)
 	defer cancel()
 
-	tweet, err := h.api.GetTweet(reqCtx, username, tweetID)
+	tw, err := h.api.GetTweet(reqCtx, username, tweetID)
 	if err != nil {
 		h.log.Error("failed to fetch tweet %s for %s: %v", tweetID, username, err)
 		return nil
 	}
 
-	return sendTweetResponse(b, ctx, tweet)
+	return tweet.SendResponse(b, ctx, tw)
 }
