@@ -45,6 +45,11 @@ type Tweet struct {
 	Text   string `json:"text"`
 	Author Author `json:"author"`
 	Media  *Media `json:"media,omitempty"`
+
+	// Chain fields for replies and quotes
+	ReplyingTo       *string `json:"replying_to,omitempty"`
+	ReplyingToStatus *string `json:"replying_to_status,omitempty"`
+	Quote            *Tweet  `json:"quote,omitempty"`
 }
 
 type Author struct {
