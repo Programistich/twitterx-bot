@@ -7,6 +7,10 @@
           {
             "type": "command",
             "command": "go test ./..."
+          },
+          {
+            "type": "command",
+            "command": "docker compose -f infra/docker-compose.yml up -d --build"
           }
         ]
       }

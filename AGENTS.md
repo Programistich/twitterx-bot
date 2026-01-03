@@ -10,5 +10,5 @@ Docker Compose lives in `infra/`.
 
 1) Ensure `infra/.env` exists (you can copy `infra/.env.example` and adjust values).
 2) From repo root:
-   - Development (local ports): `docker compose -f infra/docker-compose.yml -f infra/docker-compose.override.yml up -d --build`
+   - Development (local ports): `docker compose -f infra/docker-compose.yml -d --build`
    - Production (shared proxy network): `docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml up -d --build`
