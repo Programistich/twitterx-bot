@@ -33,6 +33,12 @@ func Register(d *ext.Dispatcher, log *logger.Logger, api *twitterxapi.Client) {
 	d.AddHandler(handlers.NewInlineQuery(func(iq *gotgbot.InlineQuery) bool {
 		return true
 	}, h.inlineQuery))
+	d.AddHandler(handlers.NewMessage(func(msg *gotgbot.Message) bool {
+		if msg.Text == "" {
+			return false
+		}
+		return twitterURLRegex.MatchString(msg.Text)
+	}, h.messageHandler))
 }
 
 func start(b *gotgbot.Bot, ctx *ext.Context) error {
@@ -97,4 +103,30 @@ func (h *Handlers) inlineQuery(b *gotgbot.Bot, ctx *ext.Context) error {
 		IsPersonal: true,
 	})
 	return err
+}
+
+func (h *Handlers) messageHandler(b *gotgbot.Bot, ctx *ext.Context) error {
+	text := strings.TrimSpace(ctx.EffectiveMessage.Text)
+	h.log.Debug("received message with twitter URL: %s", text)
+
+	matches := twitterURLRegex.FindStringSubmatch(text)
+	if matches == nil {
+		return nil
+	}
+
+	username := matches[1]
+	tweetID := matches[2]
+
+	h.log.Info("twitter URL from message - username: %s, tweet_id: %s", username, tweetID)
+
+	reqCtx, cancel := context.WithTimeout(context.Background(), inlineQueryTimeout)
+	defer cancel()
+
+	tweet, err := h.api.GetTweet(reqCtx, username, tweetID)
+	if err != nil {
+		h.log.Error("failed to fetch tweet %s for %s: %v", tweetID, username, err)
+		return nil
+	}
+
+	return sendTweetResponse(b, ctx, tweet)
 }
