@@ -123,6 +123,11 @@ func (h *Handlers) messageHandler(b *gotgbot.Bot, ctx *ext.Context) error {
 	reqCtx, cancel := context.WithTimeout(context.Background(), inlineQueryTimeout)
 	defer cancel()
 
+	_, err := b.SendChatAction(ctx.EffectiveChat.Id, gotgbot.ChatActionTyping, &gotgbot.SendChatActionOpts{})
+	if err != nil {
+		h.log.Debug("failed to send typing action: %v", err)
+	}
+
 	tw, err := h.api.GetTweet(reqCtx, username, tweetID)
 	if err != nil {
 		h.log.Error("failed to fetch tweet %s for %s: %v", tweetID, username, err)
