@@ -10,6 +10,7 @@ import (
 	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 	"github.com/PaulSonOfLars/gotgbot/v2/ext/handlers"
 
+	"twitterx-bot/internal/chain"
 	"twitterx-bot/internal/logger"
 	"twitterx-bot/internal/tweet"
 	"twitterx-bot/internal/twitterxapi"
@@ -22,7 +23,10 @@ type Handlers struct {
 	api *twitterxapi.Client
 }
 
-const inlineQueryTimeout = 10 * time.Second
+const (
+	inlineQueryTimeout = 10 * time.Second
+	chainTimeout       = 30 * time.Second
+)
 
 func Register(d *ext.Dispatcher, log *logger.Logger, api *twitterxapi.Client) {
 	if api == nil {
@@ -40,6 +44,9 @@ func Register(d *ext.Dispatcher, log *logger.Logger, api *twitterxapi.Client) {
 		}
 		return twitterURLRegex.MatchString(msg.Text)
 	}, h.messageHandler))
+	d.AddHandler(handlers.NewCallback(func(cq *gotgbot.CallbackQuery) bool {
+		return strings.HasPrefix(cq.Data, tweet.ChainCallbackPrefix)
+	}, h.chainCallback))
 }
 
 func start(b *gotgbot.Bot, ctx *ext.Context) error {
@@ -134,5 +141,65 @@ func (h *Handlers) messageHandler(b *gotgbot.Bot, ctx *ext.Context) error {
 		return nil
 	}
 
-	return tweet.SendResponse(b, ctx, tw)
+	// If the tweet is a reply, add "Send full chain" button
+	var opts *tweet.SendResponseOpts
+	if tw.ReplyingToStatus != nil {
+		opts = &tweet.SendResponseOpts{
+			ReplyMarkup: tweet.BuildChainKeyboard(username, tweetID),
+		}
+	}
+
+	return tweet.SendResponse(b, ctx, tw, opts)
+}
+
+func (h *Handlers) chainCallback(b *gotgbot.Bot, ctx *ext.Context) error {
+	cb := ctx.CallbackQuery
+
+	username, tweetID, ok := tweet.DecodeChainCallback(cb.Data)
+	if !ok {
+		h.log.Error("failed to decode chain callback: %s", cb.Data)
+		_, err := cb.Answer(b, &gotgbot.AnswerCallbackQueryOpts{
+			Text: "Invalid callback data",
+		})
+		return err
+	}
+
+	h.log.Info("chain callback - username: %s, tweet_id: %s", username, tweetID)
+
+	// Answer callback immediately with loading message
+	_, err := cb.Answer(b, &gotgbot.AnswerCallbackQueryOpts{
+		Text: "Fetching full chain...",
+	})
+	if err != nil {
+		h.log.Debug("failed to answer callback: %v", err)
+	}
+
+	reqCtx, cancel := context.WithTimeout(context.Background(), chainTimeout)
+	defer cancel()
+
+	// Fetch the tweet
+	tw, err := h.api.GetTweet(reqCtx, username, tweetID)
+	if err != nil {
+		h.log.Error("failed to fetch tweet %s for %s: %v", tweetID, username, err)
+		return nil
+	}
+
+	// Build the chain
+	items, err := chain.BuildChain(reqCtx, h.api, tw)
+	if err != nil {
+		h.log.Error("failed to build chain for tweet %s: %v", tweetID, err)
+		return nil
+	}
+
+	// Delete the original message (best effort, don't fail if it doesn't work)
+	if cb.Message != nil {
+		_, delErr := cb.Message.Delete(b, nil)
+		if delErr != nil {
+			h.log.Debug("failed to delete original message: %v", delErr)
+		}
+	}
+
+	// Send the chain
+	chatID := ctx.EffectiveChat.Id
+	return tweet.SendChainResponse(b, chatID, items)
 }
