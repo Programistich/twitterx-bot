@@ -122,12 +122,13 @@ func sendTweetMessage(b *gotgbot.Bot, chatID int64, tweet *twitterxapi.Tweet, re
 }
 
 // SendChainResponse sends a chain of tweets as separate messages, each replying to the previous.
-func SendChainResponse(b *gotgbot.Bot, chatID int64, items []chain.ChainItem) error {
+// If replyToMsgID is provided (non-zero), the first message will reply to that message.
+func SendChainResponse(b *gotgbot.Bot, chatID int64, items []chain.ChainItem, replyToMsgID int64) error {
 	if len(items) == 0 {
 		return nil
 	}
 
-	var prevMsgID int64
+	prevMsgID := replyToMsgID
 
 	for _, item := range items {
 		if item.Tweet == nil {

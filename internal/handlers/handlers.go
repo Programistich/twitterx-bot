@@ -191,15 +191,25 @@ func (h *Handlers) chainCallback(b *gotgbot.Bot, ctx *ext.Context) error {
 		return nil
 	}
 
-	// Delete the original message (best effort, don't fail if it doesn't work)
+	// Get the user's original message ID to reply to it
+	var replyToMsgID int64
 	if cb.Message != nil {
+		// cb.Message is MaybeInaccessibleMessage, need to get the actual Message
+		if msg, ok := cb.Message.(*gotgbot.Message); ok && msg != nil {
+			// msg.ReplyToMessage is the user's original message
+			if msg.ReplyToMessage != nil {
+				replyToMsgID = msg.ReplyToMessage.MessageId
+			}
+		}
+
+		// Delete the bot's message with the button (best effort)
 		_, delErr := cb.Message.Delete(b, nil)
 		if delErr != nil {
 			h.log.Debug("failed to delete original message: %v", delErr)
 		}
 	}
 
-	// Send the chain
+	// Send the chain, replying to the user's message
 	chatID := ctx.EffectiveChat.Id
-	return tweet.SendChainResponse(b, chatID, items)
+	return tweet.SendChainResponse(b, chatID, items, replyToMsgID)
 }
