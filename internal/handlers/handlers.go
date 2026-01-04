@@ -145,7 +145,7 @@ func (h *Handlers) messageHandler(b *gotgbot.Bot, ctx *ext.Context) error {
 	var opts *tweet.SendResponseOpts
 	if tw.ReplyingToStatus != nil {
 		opts = &tweet.SendResponseOpts{
-			ReplyMarkup: tweet.BuildChainKeyboard(username, tweetID),
+			ReplyMarkup: tweet.BuildChainKeyboard(username, tweetID, ctx.EffectiveMessage.MessageId),
 		}
 	}
 
@@ -155,7 +155,7 @@ func (h *Handlers) messageHandler(b *gotgbot.Bot, ctx *ext.Context) error {
 func (h *Handlers) chainCallback(b *gotgbot.Bot, ctx *ext.Context) error {
 	cb := ctx.CallbackQuery
 
-	username, tweetID, ok := tweet.DecodeChainCallback(cb.Data)
+	username, tweetID, replyToMsgID, ok := tweet.DecodeChainCallback(cb.Data)
 	if !ok {
 		h.log.Error("failed to decode chain callback: %s", cb.Data)
 		_, err := cb.Answer(b, &gotgbot.AnswerCallbackQueryOpts{
@@ -164,7 +164,7 @@ func (h *Handlers) chainCallback(b *gotgbot.Bot, ctx *ext.Context) error {
 		return err
 	}
 
-	h.log.Info("chain callback - username: %s, tweet_id: %s", username, tweetID)
+	h.log.Info("chain callback - username: %s, tweet_id: %s, reply_to_msg_id: %d", username, tweetID, replyToMsgID)
 
 	// Answer callback immediately with loading message
 	_, err := cb.Answer(b, &gotgbot.AnswerCallbackQueryOpts{
@@ -191,22 +191,9 @@ func (h *Handlers) chainCallback(b *gotgbot.Bot, ctx *ext.Context) error {
 		return nil
 	}
 
-	// Get the user's original message ID to reply to it
-	var replyToMsgID int64
-	if cb.Message != nil {
-		// cb.Message is MaybeInaccessibleMessage, need to get the actual Message
-		if msg, ok := cb.Message.(*gotgbot.Message); ok && msg != nil {
-			// msg.ReplyToMessage is the user's original message
-			if msg.ReplyToMessage != nil {
-				replyToMsgID = msg.ReplyToMessage.MessageId
-			}
-		}
-
-		// Delete the bot's message with the button (best effort)
-		_, delErr := cb.Message.Delete(b, nil)
-		if delErr != nil {
-			h.log.Debug("failed to delete original message: %v", delErr)
-		}
+	_, delErr := cb.Message.Delete(b, nil)
+	if delErr != nil {
+		h.log.Debug("failed to delete original message: %v", delErr)
 	}
 
 	// Send the chain, replying to the user's message

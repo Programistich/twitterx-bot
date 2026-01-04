@@ -6,34 +6,38 @@ import (
 
 func TestEncodeChainCallback(t *testing.T) {
 	tests := []struct {
-		name     string
-		username string
-		tweetID  string
-		want     string
+		name         string
+		username     string
+		tweetID      string
+		replyToMsgID int64
+		want         string
 	}{
 		{
-			name:     "simple username and tweet ID",
-			username: "alice",
-			tweetID:  "123456789",
-			want:     "chain:alice:123456789",
+			name:         "simple username and tweet ID",
+			username:     "alice",
+			tweetID:      "123456789",
+			replyToMsgID: 100,
+			want:         "chain:alice:123456789:100",
 		},
 		{
-			name:     "username with underscore",
-			username: "user_name",
-			tweetID:  "987654321",
-			want:     "chain:user_name:987654321",
+			name:         "username with underscore",
+			username:     "user_name",
+			tweetID:      "987654321",
+			replyToMsgID: 200,
+			want:         "chain:user_name:987654321:200",
 		},
 		{
-			name:     "long tweet ID",
-			username: "bob",
-			tweetID:  "1234567890123456789",
-			want:     "chain:bob:1234567890123456789",
+			name:         "long tweet ID",
+			username:     "bob",
+			tweetID:      "1234567890123456789",
+			replyToMsgID: 999999999,
+			want:         "chain:bob:1234567890123456789:999999999",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := EncodeChainCallback(tt.username, tt.tweetID)
+			got := EncodeChainCallback(tt.username, tt.tweetID, tt.replyToMsgID)
 			if got != tt.want {
 				t.Errorf("EncodeChainCallback() = %q, want %q", got, tt.want)
 			}
@@ -43,80 +47,98 @@ func TestEncodeChainCallback(t *testing.T) {
 
 func TestDecodeChainCallback(t *testing.T) {
 	tests := []struct {
-		name         string
-		data         string
-		wantUsername string
-		wantTweetID  string
-		wantOk       bool
+		name             string
+		data             string
+		wantUsername     string
+		wantTweetID      string
+		wantReplyToMsgID int64
+		wantOk           bool
 	}{
 		{
-			name:         "valid callback data",
-			data:         "chain:alice:123456789",
-			wantUsername: "alice",
-			wantTweetID:  "123456789",
-			wantOk:       true,
+			name:             "valid callback data",
+			data:             "chain:alice:123456789:100",
+			wantUsername:     "alice",
+			wantTweetID:      "123456789",
+			wantReplyToMsgID: 100,
+			wantOk:           true,
 		},
 		{
-			name:         "username with underscore",
-			data:         "chain:user_name:987654321",
-			wantUsername: "user_name",
-			wantTweetID:  "987654321",
-			wantOk:       true,
+			name:             "username with underscore",
+			data:             "chain:user_name:987654321:200",
+			wantUsername:     "user_name",
+			wantTweetID:      "987654321",
+			wantReplyToMsgID: 200,
+			wantOk:           true,
 		},
 		{
-			name:         "invalid prefix",
-			data:         "other:alice:123",
-			wantUsername: "",
-			wantTweetID:  "",
-			wantOk:       false,
+			name:             "invalid prefix",
+			data:             "other:alice:123:100",
+			wantUsername:     "",
+			wantTweetID:      "",
+			wantReplyToMsgID: 0,
+			wantOk:           false,
 		},
 		{
-			name:         "missing tweet ID",
-			data:         "chain:alice",
-			wantUsername: "",
-			wantTweetID:  "",
-			wantOk:       false,
+			name:             "missing replyToMsgID",
+			data:             "chain:alice:123456789",
+			wantUsername:     "",
+			wantTweetID:      "",
+			wantReplyToMsgID: 0,
+			wantOk:           false,
 		},
 		{
-			name:         "empty username",
-			data:         "chain::123",
-			wantUsername: "",
-			wantTweetID:  "",
-			wantOk:       false,
+			name:             "empty username",
+			data:             "chain::123:100",
+			wantUsername:     "",
+			wantTweetID:      "",
+			wantReplyToMsgID: 0,
+			wantOk:           false,
 		},
 		{
-			name:         "empty tweet ID",
-			data:         "chain:alice:",
-			wantUsername: "",
-			wantTweetID:  "",
-			wantOk:       false,
+			name:             "empty tweet ID",
+			data:             "chain:alice::100",
+			wantUsername:     "",
+			wantTweetID:      "",
+			wantReplyToMsgID: 0,
+			wantOk:           false,
 		},
 		{
-			name:         "empty data",
-			data:         "",
-			wantUsername: "",
-			wantTweetID:  "",
-			wantOk:       false,
+			name:             "empty data",
+			data:             "",
+			wantUsername:     "",
+			wantTweetID:      "",
+			wantReplyToMsgID: 0,
+			wantOk:           false,
 		},
 		{
-			name:         "just prefix",
-			data:         "chain:",
-			wantUsername: "",
-			wantTweetID:  "",
-			wantOk:       false,
+			name:             "just prefix",
+			data:             "chain:",
+			wantUsername:     "",
+			wantTweetID:      "",
+			wantReplyToMsgID: 0,
+			wantOk:           false,
 		},
 		{
-			name:         "extra colons in tweet ID preserved",
-			data:         "chain:alice:123:456",
-			wantUsername: "alice",
-			wantTweetID:  "123:456",
-			wantOk:       true,
+			name:             "invalid replyToMsgID (not a number)",
+			data:             "chain:alice:123456789:abc",
+			wantUsername:     "",
+			wantTweetID:      "",
+			wantReplyToMsgID: 0,
+			wantOk:           false,
+		},
+		{
+			name:             "empty replyToMsgID",
+			data:             "chain:alice:123456789:",
+			wantUsername:     "",
+			wantTweetID:      "",
+			wantReplyToMsgID: 0,
+			wantOk:           false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			username, tweetID, ok := DecodeChainCallback(tt.data)
+			username, tweetID, replyToMsgID, ok := DecodeChainCallback(tt.data)
 			if ok != tt.wantOk {
 				t.Errorf("DecodeChainCallback() ok = %v, want %v", ok, tt.wantOk)
 			}
@@ -126,24 +148,28 @@ func TestDecodeChainCallback(t *testing.T) {
 			if tweetID != tt.wantTweetID {
 				t.Errorf("DecodeChainCallback() tweetID = %q, want %q", tweetID, tt.wantTweetID)
 			}
+			if replyToMsgID != tt.wantReplyToMsgID {
+				t.Errorf("DecodeChainCallback() replyToMsgID = %d, want %d", replyToMsgID, tt.wantReplyToMsgID)
+			}
 		})
 	}
 }
 
 func TestEncodeDecodeRoundTrip(t *testing.T) {
 	tests := []struct {
-		username string
-		tweetID  string
+		username     string
+		tweetID      string
+		replyToMsgID int64
 	}{
-		{"alice", "123456789"},
-		{"user_name", "987654321"},
-		{"bob", "1234567890123456789"},
+		{"alice", "123456789", 100},
+		{"user_name", "987654321", 200},
+		{"bob", "1234567890123456789", 999999999},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.username+"/"+tt.tweetID, func(t *testing.T) {
-			encoded := EncodeChainCallback(tt.username, tt.tweetID)
-			username, tweetID, ok := DecodeChainCallback(encoded)
+			encoded := EncodeChainCallback(tt.username, tt.tweetID, tt.replyToMsgID)
+			username, tweetID, replyToMsgID, ok := DecodeChainCallback(encoded)
 			if !ok {
 				t.Fatalf("DecodeChainCallback failed for encoded data: %s", encoded)
 			}
@@ -153,12 +179,15 @@ func TestEncodeDecodeRoundTrip(t *testing.T) {
 			if tweetID != tt.tweetID {
 				t.Errorf("Round-trip tweetID = %q, want %q", tweetID, tt.tweetID)
 			}
+			if replyToMsgID != tt.replyToMsgID {
+				t.Errorf("Round-trip replyToMsgID = %d, want %d", replyToMsgID, tt.replyToMsgID)
+			}
 		})
 	}
 }
 
 func TestBuildChainKeyboard(t *testing.T) {
-	keyboard := BuildChainKeyboard("alice", "123456789")
+	keyboard := BuildChainKeyboard("alice", "123456789", 100)
 
 	if keyboard == nil {
 		t.Fatal("BuildChainKeyboard returned nil")
@@ -178,7 +207,7 @@ func TestBuildChainKeyboard(t *testing.T) {
 		t.Errorf("button text = %q, want %q", button.Text, "Send full chain")
 	}
 
-	expectedData := "chain:alice:123456789"
+	expectedData := "chain:alice:123456789:100"
 	if button.CallbackData != expectedData {
 		t.Errorf("button callback data = %q, want %q", button.CallbackData, expectedData)
 	}
@@ -190,10 +219,12 @@ func TestCallbackDataLength(t *testing.T) {
 
 	// Longest reasonable username is 15 characters
 	// Longest tweet ID is 19 digits
+	// Longest message ID is ~10 digits (realistic max)
 	username := "longestusername"
 	tweetID := "1234567890123456789"
+	replyToMsgID := int64(9999999999)
 
-	data := EncodeChainCallback(username, tweetID)
+	data := EncodeChainCallback(username, tweetID, replyToMsgID)
 
 	if len(data) > 64 {
 		t.Errorf("callback data too long: %d bytes (max 64), data: %s", len(data), data)
