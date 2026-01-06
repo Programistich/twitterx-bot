@@ -1,6 +1,8 @@
 package tweet
 
 import (
+	"errors"
+
 	"github.com/PaulSonOfLars/gotgbot/v2"
 	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 
@@ -8,14 +10,32 @@ import (
 	"twitterx-bot/internal/twitterxapi"
 )
 
+// BotAPI abstracts the Telegram bot API for testing.
+type BotAPI interface {
+	SendVideo(chatID int64, video gotgbot.InputFileOrString, opts *gotgbot.SendVideoOpts) (*gotgbot.Message, error)
+	SendPhoto(chatID int64, photo gotgbot.InputFileOrString, opts *gotgbot.SendPhotoOpts) (*gotgbot.Message, error)
+	SendMediaGroup(chatID int64, media []gotgbot.InputMedia, opts *gotgbot.SendMediaGroupOpts) ([]gotgbot.Message, error)
+	SendMessage(chatID int64, text string, opts *gotgbot.SendMessageOpts) (*gotgbot.Message, error)
+}
+
 // SendResponseOpts contains optional parameters for SendResponse.
 type SendResponseOpts struct {
 	ReplyMarkup *gotgbot.InlineKeyboardMarkup
 }
 
-func SendResponse(b *gotgbot.Bot, ctx *ext.Context, tweet *twitterxapi.Tweet, opts *SendResponseOpts) error {
+// Sender sends tweets to Telegram.
+type Sender struct {
+	Bot       BotAPI
+	Formatter Formatter
+}
+
+// SendResponse sends a single tweet reply to the chat message in ctx.
+func (s Sender) SendResponse(ctx *ext.Context, tweet *twitterxapi.Tweet, opts *SendResponseOpts) error {
 	if tweet == nil {
 		return nil
+	}
+	if s.Bot == nil {
+		return errors.New("tweet sender: bot is nil")
 	}
 
 	chatID := ctx.EffectiveChat.Id
@@ -29,14 +49,19 @@ func SendResponse(b *gotgbot.Bot, ctx *ext.Context, tweet *twitterxapi.Tweet, op
 		replyMarkup = opts.ReplyMarkup
 	}
 
-	_, err := sendTweetMessage(b, chatID, tweet, replyParams, replyMarkup)
+	_, err := s.sendTweetMessage(chatID, tweet, replyParams, replyMarkup)
 	return err
 }
 
 // sendTweetMessage sends a tweet as a Telegram message and returns the sent message.
 // This helper is used for both single tweet responses and chain threading.
-func sendTweetMessage(b *gotgbot.Bot, chatID int64, tweet *twitterxapi.Tweet, replyParams *gotgbot.ReplyParameters, replyMarkup *gotgbot.InlineKeyboardMarkup) (*gotgbot.Message, error) {
-	caption := Caption(tweet)
+func (s Sender) sendTweetMessage(chatID int64, tweet *twitterxapi.Tweet, replyParams *gotgbot.ReplyParameters, replyMarkup *gotgbot.InlineKeyboardMarkup) (*gotgbot.Message, error) {
+	if s.Bot == nil {
+		return nil, errors.New("tweet sender: bot is nil")
+	}
+
+	f := s.Formatter.withDefaults()
+	caption := f.Caption(tweet)
 
 	// Priority 1: Video
 	if tweet.Media != nil && len(tweet.Media.Videos) > 0 {
@@ -51,7 +76,7 @@ func sendTweetMessage(b *gotgbot.Bot, chatID int64, tweet *twitterxapi.Tweet, re
 			if replyMarkup != nil {
 				opts.ReplyMarkup = replyMarkup
 			}
-			return b.SendVideo(chatID, gotgbot.InputFileByURL(video.URL), opts)
+			return s.Bot.SendVideo(chatID, gotgbot.InputFileByURL(video.URL), opts)
 		}
 	}
 
@@ -78,7 +103,7 @@ func sendTweetMessage(b *gotgbot.Bot, chatID int64, tweet *twitterxapi.Tweet, re
 
 		if len(mediaGroup) > 0 {
 			// SendMediaGroup returns []Message, use first for threading
-			msgs, err := b.SendMediaGroup(chatID, mediaGroup, &gotgbot.SendMediaGroupOpts{
+			msgs, err := s.Bot.SendMediaGroup(chatID, mediaGroup, &gotgbot.SendMediaGroupOpts{
 				ReplyParameters: replyParams,
 			})
 			if err != nil {
@@ -102,12 +127,12 @@ func sendTweetMessage(b *gotgbot.Bot, chatID int64, tweet *twitterxapi.Tweet, re
 			if replyMarkup != nil {
 				opts.ReplyMarkup = replyMarkup
 			}
-			return b.SendPhoto(chatID, gotgbot.InputFileByURL(photo.URL), opts)
+			return s.Bot.SendPhoto(chatID, gotgbot.InputFileByURL(photo.URL), opts)
 		}
 	}
 
 	// Priority 4: Text only
-	message := MessageText(tweet)
+	message := f.MessageText(tweet)
 	if message != "" {
 		opts := &gotgbot.SendMessageOpts{
 			ReplyParameters: replyParams,
@@ -115,7 +140,7 @@ func sendTweetMessage(b *gotgbot.Bot, chatID int64, tweet *twitterxapi.Tweet, re
 		if replyMarkup != nil {
 			opts.ReplyMarkup = replyMarkup
 		}
-		return b.SendMessage(chatID, message, opts)
+		return s.Bot.SendMessage(chatID, message, opts)
 	}
 
 	return nil, nil
@@ -123,9 +148,12 @@ func sendTweetMessage(b *gotgbot.Bot, chatID int64, tweet *twitterxapi.Tweet, re
 
 // SendChainResponse sends a chain of tweets as separate messages, each replying to the previous.
 // If replyToMsgID is provided (non-zero), the first message will reply to that message.
-func SendChainResponse(b *gotgbot.Bot, chatID int64, items []chain.ChainItem, replyToMsgID int64) error {
+func (s Sender) SendChainResponse(chatID int64, items []chain.ChainItem, replyToMsgID int64) error {
 	if len(items) == 0 {
 		return nil
+	}
+	if s.Bot == nil {
+		return errors.New("tweet sender: bot is nil")
 	}
 
 	prevMsgID := replyToMsgID
@@ -143,7 +171,7 @@ func SendChainResponse(b *gotgbot.Bot, chatID int64, items []chain.ChainItem, re
 			}
 		}
 
-		msg, err := sendTweetMessage(b, chatID, item.Tweet, replyParams, nil)
+		msg, err := s.sendTweetMessage(chatID, item.Tweet, replyParams, nil)
 		if err != nil {
 			return err
 		}
@@ -154,4 +182,14 @@ func SendChainResponse(b *gotgbot.Bot, chatID int64, items []chain.ChainItem, re
 	}
 
 	return nil
+}
+
+func SendResponse(b *gotgbot.Bot, ctx *ext.Context, tweet *twitterxapi.Tweet, opts *SendResponseOpts) error {
+	sender := Sender{Bot: b}
+	return sender.SendResponse(ctx, tweet, opts)
+}
+
+func SendChainResponse(b *gotgbot.Bot, chatID int64, items []chain.ChainItem, replyToMsgID int64) error {
+	sender := Sender{Bot: b}
+	return sender.SendChainResponse(chatID, items, replyToMsgID)
 }

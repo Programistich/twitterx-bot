@@ -8,10 +8,17 @@ import (
 	"twitterx-bot/internal/twitterxapi"
 )
 
-func BuildInlineResult(tweet *twitterxapi.Tweet, fallbackID string) (gotgbot.InlineQueryResult, bool) {
+// InlineBuilder builds Telegram inline query results for tweets.
+type InlineBuilder struct {
+	Formatter Formatter
+}
+
+func (b InlineBuilder) Build(tweet *twitterxapi.Tweet, fallbackID string) (gotgbot.InlineQueryResult, bool) {
 	if tweet == nil {
 		return nil, false
 	}
+
+	f := b.Formatter.withDefaults()
 
 	resultID := strings.TrimSpace(tweet.ID)
 	if resultID == "" {
@@ -21,9 +28,9 @@ func BuildInlineResult(tweet *twitterxapi.Tweet, fallbackID string) (gotgbot.Inl
 		resultID = "tweet"
 	}
 
-	title := BuildTitle(tweet)
+	title := f.Title(tweet)
 	previewURL, previewKind := MediaPreview(tweet.Media)
-	description := TruncateText(strings.TrimSpace(tweet.Text), MaxDescriptionLength)
+	description := f.Description(tweet)
 	if description == "" {
 		description = MediaHint(previewKind)
 	}
@@ -42,7 +49,7 @@ func BuildInlineResult(tweet *twitterxapi.Tweet, fallbackID string) (gotgbot.Inl
 				VideoUrl:     videoURL,
 				MimeType:     MimeTypeForVideo(video.Format),
 				ThumbnailUrl: thumbURL,
-				Caption:      Caption(tweet),
+				Caption:      f.Caption(tweet),
 				Description:  description,
 				VideoWidth:   int64(video.Width),
 				VideoHeight:  int64(video.Height),
@@ -64,12 +71,12 @@ func BuildInlineResult(tweet *twitterxapi.Tweet, fallbackID string) (gotgbot.Inl
 				PhotoHeight:  int64(height),
 				Title:        title,
 				Description:  description,
-				Caption:      Caption(tweet),
+				Caption:      f.Caption(tweet),
 			}, true
 		}
 	}
 
-	message := MessageText(tweet)
+	message := f.MessageText(tweet)
 	if message == "" {
 		return nil, false
 	}
@@ -89,4 +96,8 @@ func BuildInlineResult(tweet *twitterxapi.Tweet, fallbackID string) (gotgbot.Inl
 		Description:  description,
 		ThumbnailUrl: thumbURL,
 	}, true
+}
+
+func BuildInlineResult(tweet *twitterxapi.Tweet, fallbackID string) (gotgbot.InlineQueryResult, bool) {
+	return InlineBuilder{}.Build(tweet, fallbackID)
 }
