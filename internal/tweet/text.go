@@ -2,6 +2,7 @@ package tweet
 
 import (
 	"fmt"
+	"html"
 	"strings"
 
 	"twitterx-bot/internal/twitterxapi"
@@ -94,6 +95,72 @@ func (f Formatter) Content(tweet *twitterxapi.Tweet) string {
 	return text + "\n\n" + url
 }
 
+// authorProfileURL returns the Twitter/X profile URL for the author.
+func authorProfileURL(screenName string) string {
+	if screenName == "" {
+		return ""
+	}
+	name := strings.TrimPrefix(screenName, "@")
+	return "https://x.com/" + name
+}
+
+// HTMLContent returns HTML-formatted tweet content with linked header.
+// Format: <a href="tweet_url">Tweet</a> from <a href="profile_url">Author Name</a>\n\ntext
+func (f Formatter) HTMLContent(tweet *twitterxapi.Tweet) string {
+	if tweet == nil {
+		return ""
+	}
+
+	var sb strings.Builder
+
+	// Build header: Tweet from Author
+	tweetURL := strings.TrimSpace(tweet.URL)
+	authorName := strings.TrimSpace(tweet.Author.Name)
+	screenName := strings.TrimSpace(tweet.Author.ScreenName)
+
+	// Use Name for display, fall back to ScreenName if Name is empty
+	displayName := authorName
+	if displayName == "" {
+		displayName = screenName
+	}
+
+	if tweetURL != "" {
+		sb.WriteString(fmt.Sprintf(`<a href="%s">Tweet</a>`, html.EscapeString(tweetURL)))
+	} else {
+		sb.WriteString("Tweet")
+	}
+
+	if displayName != "" {
+		profileURL := authorProfileURL(screenName)
+		if profileURL != "" {
+			sb.WriteString(fmt.Sprintf(` from <a href="%s">%s</a>`, html.EscapeString(profileURL), html.EscapeString(displayName)))
+		} else {
+			sb.WriteString(fmt.Sprintf(" from %s", html.EscapeString(displayName)))
+		}
+	}
+
+	// Add tweet text
+	text := strings.TrimSpace(tweet.Text)
+	if text != "" {
+		sb.WriteString("\n\n")
+		sb.WriteString(html.EscapeString(text))
+	}
+
+	return sb.String()
+}
+
+// HTMLCaption returns HTML-formatted tweet for media captions (max 1024 chars).
+func (f Formatter) HTMLCaption(tweet *twitterxapi.Tweet) string {
+	f = f.withDefaults()
+	return TruncateHTML(f.HTMLContent(tweet), f.MaxCaptionLength)
+}
+
+// HTMLMessageText returns HTML-formatted tweet for text messages (max 4096 chars).
+func (f Formatter) HTMLMessageText(tweet *twitterxapi.Tweet) string {
+	f = f.withDefaults()
+	return TruncateHTML(f.HTMLContent(tweet), f.MaxMessageLength)
+}
+
 func BuildTitle(tweet *twitterxapi.Tweet) string {
 	return Formatter{}.Title(tweet)
 }
@@ -108,6 +175,14 @@ func MessageText(tweet *twitterxapi.Tweet) string {
 
 func Content(tweet *twitterxapi.Tweet) string {
 	return Formatter{}.Content(tweet)
+}
+
+func HTMLCaption(tweet *twitterxapi.Tweet) string {
+	return Formatter{}.HTMLCaption(tweet)
+}
+
+func HTMLMessageText(tweet *twitterxapi.Tweet) string {
+	return Formatter{}.HTMLMessageText(tweet)
 }
 
 func TruncateText(input string, max int) string {
@@ -125,4 +200,81 @@ func TruncateText(input string, max int) string {
 		return string(runes[:max])
 	}
 	return string(runes[:max-3]) + "..."
+}
+
+// TruncateHTML truncates HTML content to max characters while preserving valid HTML structure.
+// It counts visible characters (excluding HTML tags) and ensures all opened tags are closed.
+func TruncateHTML(input string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+
+	runes := []rune(input)
+	if len(runes) <= max {
+		return input
+	}
+
+	var result strings.Builder
+	var openTags []string
+	visibleCount := 0
+	inTag := false
+	tagStart := 0
+	truncated := false
+
+	for i, r := range runes {
+		if r == '<' {
+			inTag = true
+			tagStart = i
+			continue
+		}
+
+		if r == '>' && inTag {
+			inTag = false
+			tagContent := string(runes[tagStart+1 : i])
+
+			// Check if it's a closing tag
+			if strings.HasPrefix(tagContent, "/") {
+				tagName := strings.TrimPrefix(tagContent, "/")
+				tagName = strings.Fields(tagName)[0] // Get just the tag name
+				// Remove from open tags stack
+				for j := len(openTags) - 1; j >= 0; j-- {
+					if openTags[j] == tagName {
+						openTags = append(openTags[:j], openTags[j+1:]...)
+						break
+					}
+				}
+				result.WriteString(string(runes[tagStart : i+1]))
+			} else if !strings.HasSuffix(tagContent, "/") {
+				// Opening tag (not self-closing)
+				tagName := strings.Fields(tagContent)[0]
+				openTags = append(openTags, tagName)
+				result.WriteString(string(runes[tagStart : i+1]))
+			} else {
+				// Self-closing tag
+				result.WriteString(string(runes[tagStart : i+1]))
+			}
+			continue
+		}
+
+		if inTag {
+			continue
+		}
+
+		// Visible character
+		if visibleCount >= max-3 && !truncated {
+			truncated = true
+			result.WriteString("...")
+			break
+		}
+
+		result.WriteRune(r)
+		visibleCount++
+	}
+
+	// Close any remaining open tags in reverse order
+	for i := len(openTags) - 1; i >= 0; i-- {
+		result.WriteString("</" + openTags[i] + ">")
+	}
+
+	return result.String()
 }

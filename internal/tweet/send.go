@@ -61,7 +61,7 @@ func (s Sender) sendTweetMessage(chatID int64, tweet *twitterxapi.Tweet, replyPa
 	}
 
 	f := s.Formatter.withDefaults()
-	caption := f.Caption(tweet)
+	caption := f.HTMLCaption(tweet)
 
 	// Priority 1: Video
 	if tweet.Media != nil && len(tweet.Media.Videos) > 0 {
@@ -69,6 +69,7 @@ func (s Sender) sendTweetMessage(chatID int64, tweet *twitterxapi.Tweet, replyPa
 		if video.URL != "" {
 			opts := &gotgbot.SendVideoOpts{
 				Caption:         caption,
+				ParseMode:       "HTML",
 				Width:           int64(video.Width),
 				Height:          int64(video.Height),
 				ReplyParameters: replyParams,
@@ -97,6 +98,7 @@ func (s Sender) sendTweetMessage(chatID int64, tweet *twitterxapi.Tweet, replyPa
 			}
 			if i == 0 {
 				inputPhoto.Caption = caption
+				inputPhoto.ParseMode = "HTML"
 			}
 			mediaGroup = append(mediaGroup, inputPhoto)
 		}
@@ -122,6 +124,7 @@ func (s Sender) sendTweetMessage(chatID int64, tweet *twitterxapi.Tweet, replyPa
 		if photo.URL != "" {
 			opts := &gotgbot.SendPhotoOpts{
 				Caption:         caption,
+				ParseMode:       "HTML",
 				ReplyParameters: replyParams,
 			}
 			if replyMarkup != nil {
@@ -132,9 +135,10 @@ func (s Sender) sendTweetMessage(chatID int64, tweet *twitterxapi.Tweet, replyPa
 	}
 
 	// Priority 4: Text only
-	message := f.MessageText(tweet)
+	message := f.HTMLMessageText(tweet)
 	if message != "" {
 		opts := &gotgbot.SendMessageOpts{
+			ParseMode:       "HTML",
 			ReplyParameters: replyParams,
 		}
 		if replyMarkup != nil {
