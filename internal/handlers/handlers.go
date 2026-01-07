@@ -18,6 +18,22 @@ import (
 
 var twitterURLRegex = regexp.MustCompile(`(?:https?://)?(?:www\.)?(?:twitter\.com|x\.com)/([^/]+)/status/(\d+)`)
 
+// userDisplayName returns the display name for a Telegram user.
+// Returns FirstName + LastName if available, otherwise @Username.
+func userDisplayName(user *gotgbot.User) string {
+	if user == nil {
+		return ""
+	}
+	name := strings.TrimSpace(user.FirstName + " " + user.LastName)
+	if name != "" {
+		return name
+	}
+	if user.Username != "" {
+		return "@" + user.Username
+	}
+	return ""
+}
+
 type Handlers struct {
 	log *logger.Logger
 	api *twitterxapi.Client
@@ -155,7 +171,8 @@ func (h *Handlers) messageHandler(b *gotgbot.Bot, ctx *ext.Context) error {
 	}
 
 	opts := &tweet.SendResponseOpts{
-		ReplyMarkup: tweet.BuildKeyboard(ctx.EffectiveMessage.MessageId, keyboardOpts),
+		ReplyMarkup:       tweet.BuildKeyboard(ctx.EffectiveMessage.MessageId, keyboardOpts),
+		RequesterUsername: userDisplayName(ctx.EffectiveUser),
 	}
 
 	return tweet.SendResponse(b, ctx, tw, opts)
@@ -207,13 +224,16 @@ func (h *Handlers) chainCallback(b *gotgbot.Bot, ctx *ext.Context) error {
 
 	// Send the chain, replying to the user's message
 	chatID := ctx.EffectiveChat.Id
-	return tweet.SendChainResponse(b, chatID, items, replyToMsgID)
+	chainOpts := &tweet.SendChainResponseOpts{
+		RequesterUsername: userDisplayName(&cb.From),
+	}
+	return tweet.SendChainResponse(b, chatID, items, replyToMsgID, chainOpts)
 }
 
 func (h *Handlers) deleteCallback(b *gotgbot.Bot, ctx *ext.Context) error {
 	cb := ctx.CallbackQuery
 
-	msgID, ok := tweet.DecodeDeleteCallback(cb.Data)
+	deleteData, ok := tweet.DecodeDeleteCallback(cb.Data)
 	if !ok {
 		h.log.Error("failed to decode delete callback: %s", cb.Data)
 		_, err := cb.Answer(b, &gotgbot.AnswerCallbackQueryOpts{
@@ -222,41 +242,48 @@ func (h *Handlers) deleteCallback(b *gotgbot.Bot, ctx *ext.Context) error {
 		return err
 	}
 
-	h.log.Info("delete callback - msg_id: %d", msgID)
+	h.log.Info("delete callback - msg_id: %d, has_chain: %v", deleteData.MsgID, deleteData.HasChain)
 
 	chatID := ctx.EffectiveChat.Id
 
 	// Try to delete the original user message (may fail if bot is not admin)
-	_, err := b.DeleteMessage(chatID, msgID, nil)
+	_, err := b.DeleteMessage(chatID, deleteData.MsgID, nil)
 	if err != nil {
-		h.log.Debug("failed to delete original message %d: %v", msgID, err)
+		h.log.Debug("failed to delete original message %d: %v", deleteData.MsgID, err)
 		_, answerErr := cb.Answer(b, &gotgbot.AnswerCallbackQueryOpts{
 			Text: "Cannot delete message",
 		})
 		return answerErr
 	}
 
-	// Check if there's a chain button - if so, edit to keep only that button
-	// Otherwise, remove the keyboard entirely
-	msg, ok := cb.Message.(*gotgbot.Message)
-	if ok && msg.ReplyMarkup != nil {
-		chainCallbackData := tweet.FindChainButton(msg.ReplyMarkup)
-		if chainCallbackData != "" {
-			// Has chain button - edit keyboard to keep only chain button
-			_, _, editErr := msg.EditReplyMarkup(b, &gotgbot.EditMessageReplyMarkupOpts{
-				ReplyMarkup: *tweet.BuildChainOnlyKeyboard(chainCallbackData),
-			})
-			if editErr != nil {
-				h.log.Debug("failed to edit reply markup: %v", editErr)
-			}
-		} else {
-			// No chain button - remove keyboard entirely
-			_, _, editErr := msg.EditReplyMarkup(b, &gotgbot.EditMessageReplyMarkupOpts{
-				ReplyMarkup: gotgbot.InlineKeyboardMarkup{},
-			})
-			if editErr != nil {
-				h.log.Debug("failed to remove reply markup: %v", editErr)
-			}
+	// Get the bot's message ID that contains the callback button
+	botMsgID := cb.Message.GetMessageId()
+
+	// Edit keyboard based on whether there's a chain button
+	if deleteData.HasChain {
+		// Has chain - rebuild chain button with the stored info
+		chainCallbackData := tweet.EncodeChainCallback(
+			deleteData.ChainUsername,
+			deleteData.ChainTweetID,
+			deleteData.MsgID,
+		)
+		_, _, editErr := b.EditMessageReplyMarkup(&gotgbot.EditMessageReplyMarkupOpts{
+			ChatId:      chatID,
+			MessageId:   botMsgID,
+			ReplyMarkup: *tweet.BuildChainOnlyKeyboard(chainCallbackData),
+		})
+		if editErr != nil {
+			h.log.Debug("failed to edit reply markup: %v", editErr)
+		}
+	} else {
+		// No chain button - remove keyboard entirely
+		_, _, editErr := b.EditMessageReplyMarkup(&gotgbot.EditMessageReplyMarkupOpts{
+			ChatId:      chatID,
+			MessageId:   botMsgID,
+			ReplyMarkup: gotgbot.InlineKeyboardMarkup{},
+		})
+		if editErr != nil {
+			h.log.Debug("failed to remove reply markup: %v", editErr)
 		}
 	}
 
