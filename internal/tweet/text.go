@@ -107,6 +107,12 @@ func authorProfileURL(screenName string) string {
 // HTMLContent returns HTML-formatted tweet content with linked header.
 // Format: <a href="tweet_url">Tweet</a> from <a href="profile_url">Author Name</a>\n\ntext
 func (f Formatter) HTMLContent(tweet *twitterxapi.Tweet) string {
+	return f.HTMLContentWithRequester(tweet, "")
+}
+
+// HTMLContentWithRequester returns HTML-formatted tweet content with linked header and requester info.
+// Format: <a href="tweet_url">Tweet</a> from <a href="profile_url">Author Name</a> by @requester\n\ntext
+func (f Formatter) HTMLContentWithRequester(tweet *twitterxapi.Tweet, requesterUsername string) string {
 	if tweet == nil {
 		return ""
 	}
@@ -118,10 +124,10 @@ func (f Formatter) HTMLContent(tweet *twitterxapi.Tweet) string {
 	authorName := strings.TrimSpace(tweet.Author.Name)
 	screenName := strings.TrimSpace(tweet.Author.ScreenName)
 
-	// Use Name for display, fall back to ScreenName if Name is empty
+	// Use Name for display, fall back to @ScreenName if Name is empty
 	displayName := authorName
-	if displayName == "" {
-		displayName = screenName
+	if displayName == "" && screenName != "" {
+		displayName = "@" + strings.TrimPrefix(screenName, "@")
 	}
 
 	if tweetURL != "" {
@@ -139,6 +145,11 @@ func (f Formatter) HTMLContent(tweet *twitterxapi.Tweet) string {
 		}
 	}
 
+	// Add requester info
+	if requesterUsername != "" {
+		sb.WriteString(fmt.Sprintf(" by %s", html.EscapeString(requesterUsername)))
+	}
+
 	// Add tweet text
 	text := strings.TrimSpace(tweet.Text)
 	if text != "" {
@@ -151,14 +162,24 @@ func (f Formatter) HTMLContent(tweet *twitterxapi.Tweet) string {
 
 // HTMLCaption returns HTML-formatted tweet for media captions (max 1024 chars).
 func (f Formatter) HTMLCaption(tweet *twitterxapi.Tweet) string {
+	return f.HTMLCaptionWithRequester(tweet, "")
+}
+
+// HTMLCaptionWithRequester returns HTML-formatted tweet for media captions with requester info.
+func (f Formatter) HTMLCaptionWithRequester(tweet *twitterxapi.Tweet, requesterUsername string) string {
 	f = f.withDefaults()
-	return TruncateHTML(f.HTMLContent(tweet), f.MaxCaptionLength)
+	return TruncateHTML(f.HTMLContentWithRequester(tweet, requesterUsername), f.MaxCaptionLength)
 }
 
 // HTMLMessageText returns HTML-formatted tweet for text messages (max 4096 chars).
 func (f Formatter) HTMLMessageText(tweet *twitterxapi.Tweet) string {
+	return f.HTMLMessageTextWithRequester(tweet, "")
+}
+
+// HTMLMessageTextWithRequester returns HTML-formatted tweet for text messages with requester info.
+func (f Formatter) HTMLMessageTextWithRequester(tweet *twitterxapi.Tweet, requesterUsername string) string {
 	f = f.withDefaults()
-	return TruncateHTML(f.HTMLContent(tweet), f.MaxMessageLength)
+	return TruncateHTML(f.HTMLContentWithRequester(tweet, requesterUsername), f.MaxMessageLength)
 }
 
 func BuildTitle(tweet *twitterxapi.Tweet) string {

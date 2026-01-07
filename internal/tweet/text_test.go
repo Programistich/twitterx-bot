@@ -176,7 +176,7 @@ func TestHTMLContent(t *testing.T) {
 Hello world`,
 		},
 		{
-			name: "falls back to screen name when name is empty",
+			name: "falls back to @screen name when name is empty",
 			tweet: &twitterxapi.Tweet{
 				URL:  "https://x.com/bob/status/456",
 				Text: "Test tweet",
@@ -184,7 +184,7 @@ Hello world`,
 					ScreenName: "bob",
 				},
 			},
-			want: `<a href="https://x.com/bob/status/456">Tweet</a> from <a href="https://x.com/bob">bob</a>
+			want: `<a href="https://x.com/bob/status/456">Tweet</a> from <a href="https://x.com/bob">@bob</a>
 
 Test tweet`,
 		},
