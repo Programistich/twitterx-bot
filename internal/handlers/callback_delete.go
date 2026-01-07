@@ -4,7 +4,7 @@ import (
 	"github.com/PaulSonOfLars/gotgbot/v2"
 	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 
-	"twitterx-bot/internal/tweet"
+	"twitterx-bot/internal/telegram/tweet"
 )
 
 func (h *Handlers) deleteCallback(b *gotgbot.Bot, ctx *ext.Context) error {

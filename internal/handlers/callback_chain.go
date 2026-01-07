@@ -7,7 +7,7 @@ import (
 	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 
 	"twitterx-bot/internal/chain"
-	"twitterx-bot/internal/tweet"
+	"twitterx-bot/internal/telegram/tweet"
 )
 
 func (h *Handlers) chainCallback(b *gotgbot.Bot, ctx *ext.Context) error {

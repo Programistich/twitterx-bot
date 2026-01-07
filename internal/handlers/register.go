@@ -9,7 +9,7 @@ import (
 	"github.com/PaulSonOfLars/gotgbot/v2/ext/handlers"
 
 	"twitterx-bot/internal/logger"
-	"twitterx-bot/internal/tweet"
+	"twitterx-bot/internal/telegram/tweet"
 	"twitterx-bot/internal/twitterurl"
 	"twitterx-bot/internal/twitterxapi"
 )

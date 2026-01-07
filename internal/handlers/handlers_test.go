@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"twitterx-bot/internal/tweet"
+	"twitterx-bot/internal/telegram/tweet"
 )
 
 func TestChainCallbackFilter(t *testing.T) {

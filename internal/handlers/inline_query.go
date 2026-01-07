@@ -7,7 +7,7 @@ import (
 	"github.com/PaulSonOfLars/gotgbot/v2"
 	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 
-	"twitterx-bot/internal/tweet"
+	"twitterx-bot/internal/telegram/tweet"
 	"twitterx-bot/internal/twitterurl"
 )
 

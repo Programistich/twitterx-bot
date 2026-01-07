@@ -268,11 +268,11 @@ func TestTruncateHTML(t *testing.T) {
 			want:  "<a>hi</a>",
 		},
 		{
-			name:  "truncates preserving tags",
+			name: "truncates preserving tags",
 			input: `<a href="url">Tweet</a> from <a href="profile">Author Name</a>
 
 This is a long tweet text that needs to be truncated`,
-			max:  50,
+			max: 50,
 			want: `<a href="url">Tweet</a> from <a href="profile">Author Name</a>
 
 This is a long tweet te...`,
