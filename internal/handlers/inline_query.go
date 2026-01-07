@@ -8,14 +8,15 @@ import (
 	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 
 	"twitterx-bot/internal/tweet"
+	"twitterx-bot/internal/twitterurl"
 )
 
 func (h *Handlers) inlineQuery(b *gotgbot.Bot, ctx *ext.Context) error {
 	query := strings.TrimSpace(ctx.InlineQuery.Query)
 	h.log.Debug("received inline query: %s", query)
 
-	matches := twitterURLRegex.FindStringSubmatch(query)
-	if matches == nil {
+	username, tweetID, ok := twitterurl.ParseTweetURL(query)
+	if !ok {
 		h.log.Debug("no twitter URL found in query")
 		_, err := ctx.InlineQuery.Answer(b, nil, &gotgbot.AnswerInlineQueryOpts{
 			CacheTime:  0,
@@ -23,9 +24,6 @@ func (h *Handlers) inlineQuery(b *gotgbot.Bot, ctx *ext.Context) error {
 		})
 		return err
 	}
-
-	username := matches[1]
-	tweetID := matches[2]
 
 	h.log.Info("twitter URL: %s", query)
 	h.log.Info("twitter URL parsed - username: %s, tweet_id: %s", username, tweetID)

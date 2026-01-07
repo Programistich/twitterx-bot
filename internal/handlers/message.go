@@ -8,19 +8,17 @@ import (
 	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 
 	"twitterx-bot/internal/tweet"
+	"twitterx-bot/internal/twitterurl"
 )
 
 func (h *Handlers) messageHandler(b *gotgbot.Bot, ctx *ext.Context) error {
 	text := strings.TrimSpace(ctx.EffectiveMessage.Text)
 	h.log.Debug("received message with twitter URL: %s", text)
 
-	matches := twitterURLRegex.FindStringSubmatch(text)
-	if matches == nil {
+	username, tweetID, ok := twitterurl.ParseTweetURL(text)
+	if !ok {
 		return nil
 	}
-
-	username := matches[1]
-	tweetID := matches[2]
 
 	h.log.Info("twitter URL from message - username: %s, tweet_id: %s", username, tweetID)
 

@@ -14,8 +14,6 @@ import (
 	"twitterx-bot/internal/twitterxapi"
 )
 
-var twitterURLRegex = twitterurl.TweetURLRegex
-
 type Handlers struct {
 	log *logger.Logger
 	api *twitterxapi.Client
@@ -40,7 +38,8 @@ func Register(d *ext.Dispatcher, log *logger.Logger, api *twitterxapi.Client) {
 		if msg.Text == "" {
 			return false
 		}
-		return twitterURLRegex.MatchString(msg.Text)
+		_, _, ok := twitterurl.ParseTweetURL(msg.Text)
+		return ok
 	}, h.messageHandler))
 	d.AddHandler(handlers.NewCallback(func(cq *gotgbot.CallbackQuery) bool {
 		return strings.HasPrefix(cq.Data, tweet.ChainCallbackPrefix)
