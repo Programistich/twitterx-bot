@@ -9,6 +9,7 @@ import (
 
 	"twitterx-bot/internal/telegram/tweet"
 	"twitterx-bot/internal/twitterurl"
+	"twitterx-bot/internal/usecase/tweetsvc"
 )
 
 func (h *Handlers) messageHandler(b *gotgbot.Bot, ctx *ext.Context) error {
@@ -30,26 +31,11 @@ func (h *Handlers) messageHandler(b *gotgbot.Bot, ctx *ext.Context) error {
 		h.log.Debug("failed to send typing action: %v", err)
 	}
 
-	tw, err := h.api.GetTweet(reqCtx, username, tweetID)
-	if err != nil {
-		h.log.Error("failed to fetch tweet %s for %s: %v", tweetID, username, err)
+	svc := tweetsvc.New(h.api, tweet.Sender{Bot: b})
+	if err := svc.SendTweet(reqCtx, ctx.EffectiveChat.Id, ctx.EffectiveMessage.MessageId, username, tweetID, userDisplayName(ctx.EffectiveUser)); err != nil {
+		h.log.Error("failed to send tweet %s for %s: %v", tweetID, username, err)
 		return nil
 	}
 
-	// Build keyboard with optional chain button and always delete button
-	var keyboardOpts *tweet.KeyboardOpts
-	if tw.ReplyingToStatus != nil {
-		keyboardOpts = &tweet.KeyboardOpts{
-			ShowChainButton: true,
-			ChainUsername:   username,
-			ChainTweetID:    tweetID,
-		}
-	}
-
-	opts := &tweet.SendResponseOpts{
-		ReplyMarkup:       tweet.BuildKeyboard(ctx.EffectiveMessage.MessageId, keyboardOpts),
-		RequesterUsername: userDisplayName(ctx.EffectiveUser),
-	}
-
-	return tweet.SendResponse(b, ctx, tw, opts)
+	return nil
 }

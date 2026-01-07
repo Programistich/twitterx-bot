@@ -1,6 +1,7 @@
 package tweet
 
 import (
+	"context"
 	"errors"
 
 	"github.com/PaulSonOfLars/gotgbot/v2"
@@ -32,6 +33,14 @@ type Sender struct {
 
 // SendResponse sends a single tweet reply to the chat message in ctx.
 func (s Sender) SendResponse(ctx *ext.Context, tweet *twitterxapi.Tweet, opts *SendResponseOpts) error {
+	if ctx == nil {
+		return nil
+	}
+	return s.SendTweet(context.Background(), ctx.EffectiveChat.Id, ctx.EffectiveMessage.MessageId, tweet, opts)
+}
+
+// SendTweet sends a single tweet response to the given chat.
+func (s Sender) SendTweet(_ context.Context, chatID, replyToMsgID int64, tweet *twitterxapi.Tweet, opts *SendResponseOpts) error {
 	if tweet == nil {
 		return nil
 	}
@@ -39,10 +48,12 @@ func (s Sender) SendResponse(ctx *ext.Context, tweet *twitterxapi.Tweet, opts *S
 		return errors.New("tweet sender: bot is nil")
 	}
 
-	chatID := ctx.EffectiveChat.Id
-	replyParams := &gotgbot.ReplyParameters{
-		MessageId:                ctx.EffectiveMessage.MessageId,
-		AllowSendingWithoutReply: true,
+	var replyParams *gotgbot.ReplyParameters
+	if replyToMsgID != 0 {
+		replyParams = &gotgbot.ReplyParameters{
+			MessageId:                replyToMsgID,
+			AllowSendingWithoutReply: true,
+		}
 	}
 
 	var replyMarkup *gotgbot.InlineKeyboardMarkup
