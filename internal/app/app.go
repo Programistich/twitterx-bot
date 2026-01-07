@@ -54,6 +54,19 @@ func Start(bot *gotgbot.Bot, updater *ext.Updater, l *logger.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	if _, err := bot.SetMyName(&gotgbot.SetMyNameOpts{Name: "TwitterX"}); err != nil {
+		if l != nil {
+			l.Error("set bot name: %v", err)
+		}
+	}
+	if _, err := bot.SetMyDescription(&gotgbot.SetMyDescriptionOpts{
+		Description: "Telegram Bot for best read twitter/X tweets https://github.com/Programistich/twitterx-bot",
+	}); err != nil {
+		if l != nil {
+			l.Error("set bot description: %v", err)
+		}
+	}
+
 	if err := updater.StartPolling(bot, &ext.PollingOpts{DropPendingUpdates: true}); err != nil {
 		return fmt.Errorf("start polling: %w", err)
 	}
