@@ -186,31 +186,154 @@ func TestEncodeDecodeRoundTrip(t *testing.T) {
 	}
 }
 
-func TestBuildChainKeyboard(t *testing.T) {
-	keyboard := BuildChainKeyboard("alice", "123456789", 100)
-
-	if keyboard == nil {
-		t.Fatal("BuildChainKeyboard returned nil")
+func TestEncodeDeleteCallback(t *testing.T) {
+	tests := []struct {
+		name  string
+		msgID int64
+		want  string
+	}{
+		{
+			name:  "simple message ID",
+			msgID: 100,
+			want:  "del:100",
+		},
+		{
+			name:  "large message ID",
+			msgID: 999999999,
+			want:  "del:999999999",
+		},
 	}
 
-	if len(keyboard.InlineKeyboard) != 1 {
-		t.Fatalf("expected 1 row, got %d", len(keyboard.InlineKeyboard))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := EncodeDeleteCallback(tt.msgID)
+			if got != tt.want {
+				t.Errorf("EncodeDeleteCallback() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDecodeDeleteCallback(t *testing.T) {
+	tests := []struct {
+		name      string
+		data      string
+		wantMsgID int64
+		wantOk    bool
+	}{
+		{
+			name:      "valid callback data",
+			data:      "del:100",
+			wantMsgID: 100,
+			wantOk:    true,
+		},
+		{
+			name:      "large message ID",
+			data:      "del:999999999",
+			wantMsgID: 999999999,
+			wantOk:    true,
+		},
+		{
+			name:      "invalid prefix",
+			data:      "other:100",
+			wantMsgID: 0,
+			wantOk:    false,
+		},
+		{
+			name:      "empty data",
+			data:      "",
+			wantMsgID: 0,
+			wantOk:    false,
+		},
+		{
+			name:      "just prefix",
+			data:      "del:",
+			wantMsgID: 0,
+			wantOk:    false,
+		},
+		{
+			name:      "invalid msgID (not a number)",
+			data:      "del:abc",
+			wantMsgID: 0,
+			wantOk:    false,
+		},
 	}
 
-	row := keyboard.InlineKeyboard[0]
-	if len(row) != 1 {
-		t.Fatalf("expected 1 button in row, got %d", len(row))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msgID, ok := DecodeDeleteCallback(tt.data)
+			if ok != tt.wantOk {
+				t.Errorf("DecodeDeleteCallback() ok = %v, want %v", ok, tt.wantOk)
+			}
+			if msgID != tt.wantMsgID {
+				t.Errorf("DecodeDeleteCallback() msgID = %d, want %d", msgID, tt.wantMsgID)
+			}
+		})
 	}
+}
 
-	button := row[0]
-	if button.Text != "Send full chain" {
-		t.Errorf("button text = %q, want %q", button.Text, "Send full chain")
-	}
+func TestBuildKeyboard(t *testing.T) {
+	t.Run("with chain button", func(t *testing.T) {
+		keyboard := BuildKeyboard(100, &KeyboardOpts{
+			ShowChainButton: true,
+			ChainUsername:   "alice",
+			ChainTweetID:    "123456789",
+		})
 
-	expectedData := "chain:alice:123456789:100"
-	if button.CallbackData != expectedData {
-		t.Errorf("button callback data = %q, want %q", button.CallbackData, expectedData)
-	}
+		if keyboard == nil {
+			t.Fatal("BuildKeyboard returned nil")
+		}
+
+		if len(keyboard.InlineKeyboard) != 1 {
+			t.Fatalf("expected 1 row, got %d", len(keyboard.InlineKeyboard))
+		}
+
+		row := keyboard.InlineKeyboard[0]
+		if len(row) != 2 {
+			t.Fatalf("expected 2 buttons in row, got %d", len(row))
+		}
+
+		chainBtn := row[0]
+		if chainBtn.Text != "Send full chain" {
+			t.Errorf("chain button text = %q, want %q", chainBtn.Text, "Send full chain")
+		}
+		if chainBtn.CallbackData != "chain:alice:123456789:100" {
+			t.Errorf("chain button callback data = %q, want %q", chainBtn.CallbackData, "chain:alice:123456789:100")
+		}
+
+		deleteBtn := row[1]
+		if deleteBtn.Text != "Delete original" {
+			t.Errorf("delete button text = %q, want %q", deleteBtn.Text, "Delete original")
+		}
+		if deleteBtn.CallbackData != "del:100" {
+			t.Errorf("delete button callback data = %q, want %q", deleteBtn.CallbackData, "del:100")
+		}
+	})
+
+	t.Run("without chain button", func(t *testing.T) {
+		keyboard := BuildKeyboard(100, nil)
+
+		if keyboard == nil {
+			t.Fatal("BuildKeyboard returned nil")
+		}
+
+		if len(keyboard.InlineKeyboard) != 1 {
+			t.Fatalf("expected 1 row, got %d", len(keyboard.InlineKeyboard))
+		}
+
+		row := keyboard.InlineKeyboard[0]
+		if len(row) != 1 {
+			t.Fatalf("expected 1 button in row, got %d", len(row))
+		}
+
+		deleteBtn := row[0]
+		if deleteBtn.Text != "Delete original" {
+			t.Errorf("delete button text = %q, want %q", deleteBtn.Text, "Delete original")
+		}
+		if deleteBtn.CallbackData != "del:100" {
+			t.Errorf("delete button callback data = %q, want %q", deleteBtn.CallbackData, "del:100")
+		}
+	})
 }
 
 func TestCallbackDataLength(t *testing.T) {

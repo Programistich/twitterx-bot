@@ -47,6 +47,9 @@ func Register(d *ext.Dispatcher, log *logger.Logger, api *twitterxapi.Client) {
 	d.AddHandler(handlers.NewCallback(func(cq *gotgbot.CallbackQuery) bool {
 		return strings.HasPrefix(cq.Data, tweet.ChainCallbackPrefix)
 	}, h.chainCallback))
+	d.AddHandler(handlers.NewCallback(func(cq *gotgbot.CallbackQuery) bool {
+		return strings.HasPrefix(cq.Data, tweet.DeleteCallbackPrefix)
+	}, h.deleteCallback))
 }
 
 func start(b *gotgbot.Bot, ctx *ext.Context) error {
@@ -141,12 +144,18 @@ func (h *Handlers) messageHandler(b *gotgbot.Bot, ctx *ext.Context) error {
 		return nil
 	}
 
-	// If the tweet is a reply, add "Send full chain" button
-	var opts *tweet.SendResponseOpts
+	// Build keyboard with optional chain button and always delete button
+	var keyboardOpts *tweet.KeyboardOpts
 	if tw.ReplyingToStatus != nil {
-		opts = &tweet.SendResponseOpts{
-			ReplyMarkup: tweet.BuildChainKeyboard(username, tweetID, ctx.EffectiveMessage.MessageId),
+		keyboardOpts = &tweet.KeyboardOpts{
+			ShowChainButton: true,
+			ChainUsername:   username,
+			ChainTweetID:    tweetID,
 		}
+	}
+
+	opts := &tweet.SendResponseOpts{
+		ReplyMarkup: tweet.BuildKeyboard(ctx.EffectiveMessage.MessageId, keyboardOpts),
 	}
 
 	return tweet.SendResponse(b, ctx, tw, opts)
@@ -199,4 +208,60 @@ func (h *Handlers) chainCallback(b *gotgbot.Bot, ctx *ext.Context) error {
 	// Send the chain, replying to the user's message
 	chatID := ctx.EffectiveChat.Id
 	return tweet.SendChainResponse(b, chatID, items, replyToMsgID)
+}
+
+func (h *Handlers) deleteCallback(b *gotgbot.Bot, ctx *ext.Context) error {
+	cb := ctx.CallbackQuery
+
+	msgID, ok := tweet.DecodeDeleteCallback(cb.Data)
+	if !ok {
+		h.log.Error("failed to decode delete callback: %s", cb.Data)
+		_, err := cb.Answer(b, &gotgbot.AnswerCallbackQueryOpts{
+			Text: "Invalid callback data",
+		})
+		return err
+	}
+
+	h.log.Info("delete callback - msg_id: %d", msgID)
+
+	chatID := ctx.EffectiveChat.Id
+
+	// Try to delete the original user message (may fail if bot is not admin)
+	_, err := b.DeleteMessage(chatID, msgID, nil)
+	if err != nil {
+		h.log.Debug("failed to delete original message %d: %v", msgID, err)
+		_, answerErr := cb.Answer(b, &gotgbot.AnswerCallbackQueryOpts{
+			Text: "Cannot delete message",
+		})
+		return answerErr
+	}
+
+	// Check if there's a chain button - if so, edit to keep only that button
+	// Otherwise, remove the keyboard entirely
+	msg, ok := cb.Message.(*gotgbot.Message)
+	if ok && msg.ReplyMarkup != nil {
+		chainCallbackData := tweet.FindChainButton(msg.ReplyMarkup)
+		if chainCallbackData != "" {
+			// Has chain button - edit keyboard to keep only chain button
+			_, _, editErr := msg.EditReplyMarkup(b, &gotgbot.EditMessageReplyMarkupOpts{
+				ReplyMarkup: *tweet.BuildChainOnlyKeyboard(chainCallbackData),
+			})
+			if editErr != nil {
+				h.log.Debug("failed to edit reply markup: %v", editErr)
+			}
+		} else {
+			// No chain button - remove keyboard entirely
+			_, _, editErr := msg.EditReplyMarkup(b, &gotgbot.EditMessageReplyMarkupOpts{
+				ReplyMarkup: gotgbot.InlineKeyboardMarkup{},
+			})
+			if editErr != nil {
+				h.log.Debug("failed to remove reply markup: %v", editErr)
+			}
+		}
+	}
+
+	_, err = cb.Answer(b, &gotgbot.AnswerCallbackQueryOpts{
+		Text: "Deleted",
+	})
+	return err
 }
