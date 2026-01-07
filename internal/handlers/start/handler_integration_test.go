@@ -5,6 +5,7 @@ import (
 
 	"github.com/PaulSonOfLars/gotgbot/v2"
 
+	"twitterx-bot/internal/handlers/shared"
 	"twitterx-bot/internal/handlers/testutil"
 )
 
@@ -39,7 +40,7 @@ func TestIntegration_StartCommand_RepliesWithGreeting(t *testing.T) {
 	if !ok {
 		t.Fatalf("sendMessage missing text: %v", call.JSON)
 	}
-	if text != "Hi! Send me any text and I will echo it back." {
+	if text != shared.HelpText {
 		t.Fatalf("start message = %q, want greeting", text)
 	}
 	if replyID, ok := call.JSONInt64("reply_parameters.message_id"); !ok || replyID != msgID {

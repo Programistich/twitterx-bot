@@ -24,7 +24,16 @@ func NewBot() (*gotgbot.Bot, *ext.Updater, *logger.Logger, error) {
 
 	l := logger.New(cfg.Debug)
 
-	bot, err := gotgbot.NewBot(cfg.BotToken, &gotgbot.BotOpts{})
+	botOpts := &gotgbot.BotOpts{}
+	if cfg.TelegramAPIURL != "" {
+		botOpts.BotClient = &gotgbot.BaseBotClient{
+			DefaultRequestOpts: &gotgbot.RequestOpts{
+				APIURL: cfg.TelegramAPIURL,
+			},
+		}
+	}
+
+	bot, err := gotgbot.NewBot(cfg.BotToken, botOpts)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("init bot: %w", err)
 	}
