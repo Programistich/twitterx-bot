@@ -190,23 +190,46 @@ func TestEncodeDeleteCallback(t *testing.T) {
 	tests := []struct {
 		name  string
 		msgID int64
+		opts  *KeyboardOpts
 		want  string
 	}{
 		{
-			name:  "simple message ID",
+			name:  "simple message ID without chain",
 			msgID: 100,
+			opts:  nil,
 			want:  "del:100",
 		},
 		{
-			name:  "large message ID",
+			name:  "large message ID without chain",
 			msgID: 999999999,
+			opts:  nil,
 			want:  "del:999999999",
+		},
+		{
+			name:  "with chain info",
+			msgID: 100,
+			opts: &KeyboardOpts{
+				ShowChainButton: true,
+				ChainUsername:   "alice",
+				ChainTweetID:    "123456789",
+			},
+			want: "del:100|alice|123456789",
+		},
+		{
+			name:  "opts without chain button",
+			msgID: 100,
+			opts: &KeyboardOpts{
+				ShowChainButton: false,
+				ChainUsername:   "alice",
+				ChainTweetID:    "123456789",
+			},
+			want: "del:100",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := EncodeDeleteCallback(tt.msgID)
+			got := EncodeDeleteCallback(tt.msgID, tt.opts)
 			if got != tt.want {
 				t.Errorf("EncodeDeleteCallback() = %q, want %q", got, tt.want)
 			}
@@ -216,57 +239,80 @@ func TestEncodeDeleteCallback(t *testing.T) {
 
 func TestDecodeDeleteCallback(t *testing.T) {
 	tests := []struct {
-		name      string
-		data      string
-		wantMsgID int64
-		wantOk    bool
+		name   string
+		data   string
+		want   DeleteCallbackData
+		wantOk bool
 	}{
 		{
-			name:      "valid callback data",
-			data:      "del:100",
-			wantMsgID: 100,
-			wantOk:    true,
+			name:   "valid callback data without chain",
+			data:   "del:100",
+			want:   DeleteCallbackData{MsgID: 100, HasChain: false},
+			wantOk: true,
 		},
 		{
-			name:      "large message ID",
-			data:      "del:999999999",
-			wantMsgID: 999999999,
-			wantOk:    true,
+			name:   "large message ID without chain",
+			data:   "del:999999999",
+			want:   DeleteCallbackData{MsgID: 999999999, HasChain: false},
+			wantOk: true,
 		},
 		{
-			name:      "invalid prefix",
-			data:      "other:100",
-			wantMsgID: 0,
-			wantOk:    false,
+			name: "valid callback data with chain",
+			data: "del:100|alice|123456789",
+			want: DeleteCallbackData{
+				MsgID:         100,
+				HasChain:      true,
+				ChainUsername: "alice",
+				ChainTweetID:  "123456789",
+			},
+			wantOk: true,
 		},
 		{
-			name:      "empty data",
-			data:      "",
-			wantMsgID: 0,
-			wantOk:    false,
+			name:   "invalid prefix",
+			data:   "other:100",
+			want:   DeleteCallbackData{},
+			wantOk: false,
 		},
 		{
-			name:      "just prefix",
-			data:      "del:",
-			wantMsgID: 0,
-			wantOk:    false,
+			name:   "empty data",
+			data:   "",
+			want:   DeleteCallbackData{},
+			wantOk: false,
 		},
 		{
-			name:      "invalid msgID (not a number)",
-			data:      "del:abc",
-			wantMsgID: 0,
-			wantOk:    false,
+			name:   "just prefix",
+			data:   "del:",
+			want:   DeleteCallbackData{},
+			wantOk: false,
+		},
+		{
+			name:   "invalid msgID (not a number)",
+			data:   "del:abc",
+			want:   DeleteCallbackData{},
+			wantOk: false,
+		},
+		{
+			name:   "incomplete chain info (missing tweetID)",
+			data:   "del:100|alice",
+			want:   DeleteCallbackData{MsgID: 100, HasChain: false},
+			wantOk: true,
+		},
+		{
+			name:   "empty chain username",
+			data:   "del:100||123456789",
+			want:   DeleteCallbackData{MsgID: 100, HasChain: false},
+			wantOk: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			msgID, ok := DecodeDeleteCallback(tt.data)
+			got, ok := DecodeDeleteCallback(tt.data)
 			if ok != tt.wantOk {
 				t.Errorf("DecodeDeleteCallback() ok = %v, want %v", ok, tt.wantOk)
 			}
-			if msgID != tt.wantMsgID {
-				t.Errorf("DecodeDeleteCallback() msgID = %d, want %d", msgID, tt.wantMsgID)
+			if got != tt.want {
+				t.Errorf("DecodeDeleteCallback() = %+v, want %+v", got, tt.want)
 			}
 		})
 	}
@@ -305,8 +351,9 @@ func TestBuildKeyboard(t *testing.T) {
 		if deleteBtn.Text != "Delete original" {
 			t.Errorf("delete button text = %q, want %q", deleteBtn.Text, "Delete original")
 		}
-		if deleteBtn.CallbackData != "del:100" {
-			t.Errorf("delete button callback data = %q, want %q", deleteBtn.CallbackData, "del:100")
+		// Delete button should contain chain info when chain button is present
+		if deleteBtn.CallbackData != "del:100|alice|123456789" {
+			t.Errorf("delete button callback data = %q, want %q", deleteBtn.CallbackData, "del:100|alice|123456789")
 		}
 	})
 
@@ -347,9 +394,22 @@ func TestCallbackDataLength(t *testing.T) {
 	tweetID := "1234567890123456789"
 	replyToMsgID := int64(9999999999)
 
-	data := EncodeChainCallback(username, tweetID, replyToMsgID)
+	t.Run("chain callback", func(t *testing.T) {
+		data := EncodeChainCallback(username, tweetID, replyToMsgID)
+		if len(data) > 64 {
+			t.Errorf("chain callback data too long: %d bytes (max 64), data: %s", len(data), data)
+		}
+	})
 
-	if len(data) > 64 {
-		t.Errorf("callback data too long: %d bytes (max 64), data: %s", len(data), data)
-	}
+	t.Run("delete callback with chain info", func(t *testing.T) {
+		opts := &KeyboardOpts{
+			ShowChainButton: true,
+			ChainUsername:   username,
+			ChainTweetID:    tweetID,
+		}
+		data := EncodeDeleteCallback(replyToMsgID, opts)
+		if len(data) > 64 {
+			t.Errorf("delete callback data too long: %d bytes (max 64), data: %s", len(data), data)
+		}
+	})
 }

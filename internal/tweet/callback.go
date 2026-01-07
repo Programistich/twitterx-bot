@@ -40,29 +40,53 @@ func DecodeChainCallback(data string) (username, tweetID string, replyToMsgID in
 }
 
 // EncodeDeleteCallback creates callback data for the "Delete original" button.
-// Format: del:msgID
-func EncodeDeleteCallback(msgID int64) string {
-	return DeleteCallbackPrefix + strconv.FormatInt(msgID, 10)
+// Format: del:msgID or del:msgID|username|tweetID (if chain info is provided)
+func EncodeDeleteCallback(msgID int64, chainOpts *KeyboardOpts) string {
+	base := DeleteCallbackPrefix + strconv.FormatInt(msgID, 10)
+	if chainOpts != nil && chainOpts.ShowChainButton {
+		return base + "|" + chainOpts.ChainUsername + "|" + chainOpts.ChainTweetID
+	}
+	return base
 }
 
-// DecodeDeleteCallback parses callback data and extracts msgID.
+// DeleteCallbackData holds the decoded delete callback information.
+type DeleteCallbackData struct {
+	MsgID         int64
+	HasChain      bool
+	ChainUsername string
+	ChainTweetID  string
+}
+
+// DecodeDeleteCallback parses callback data and extracts msgID and optional chain info.
 // Returns ok=false if the format is invalid.
-func DecodeDeleteCallback(data string) (msgID int64, ok bool) {
+func DecodeDeleteCallback(data string) (result DeleteCallbackData, ok bool) {
 	if !strings.HasPrefix(data, DeleteCallbackPrefix) {
-		return 0, false
+		return DeleteCallbackData{}, false
 	}
 
 	rest := strings.TrimPrefix(data, DeleteCallbackPrefix)
 	if rest == "" {
-		return 0, false
+		return DeleteCallbackData{}, false
 	}
 
-	msgID, err := strconv.ParseInt(rest, 10, 64)
+	// Check if there's chain info (separated by |)
+	parts := strings.SplitN(rest, "|", 3)
+
+	msgID, err := strconv.ParseInt(parts[0], 10, 64)
 	if err != nil {
-		return 0, false
+		return DeleteCallbackData{}, false
 	}
 
-	return msgID, true
+	result.MsgID = msgID
+
+	// If we have chain info (username|tweetID)
+	if len(parts) == 3 && parts[1] != "" && parts[2] != "" {
+		result.HasChain = true
+		result.ChainUsername = parts[1]
+		result.ChainTweetID = parts[2]
+	}
+
+	return result, true
 }
 
 // KeyboardOpts configures the inline keyboard buttons.
@@ -86,7 +110,7 @@ func BuildKeyboard(replyToMsgID int64, opts *KeyboardOpts) *gotgbot.InlineKeyboa
 
 	buttons = append(buttons, gotgbot.InlineKeyboardButton{
 		Text:         "Delete original",
-		CallbackData: EncodeDeleteCallback(replyToMsgID),
+		CallbackData: EncodeDeleteCallback(replyToMsgID, opts),
 	})
 
 	return &gotgbot.InlineKeyboardMarkup{
