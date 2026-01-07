@@ -6,6 +6,11 @@ import (
 )
 
 func start(b *gotgbot.Bot, ctx *ext.Context) error {
-	_, err := ctx.EffectiveMessage.Reply(b, "Hi! Send me any text and I will echo it back.", &gotgbot.SendMessageOpts{})
+	_, err := ctx.EffectiveMessage.Reply(b, HelpText, &gotgbot.SendMessageOpts{})
+	return err
+}
+
+func help(b *gotgbot.Bot, ctx *ext.Context) error {
+	_, err := ctx.EffectiveMessage.Reply(b, HelpText, &gotgbot.SendMessageOpts{})
 	return err
 }

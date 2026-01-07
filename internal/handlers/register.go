@@ -37,6 +37,7 @@ func Register(d *ext.Dispatcher, log *logger.Logger, api *twitterxapi.Client) {
 	}
 
 	d.AddHandler(handlers.NewCommand("start", start))
+	d.AddHandler(handlers.NewCommand("help", help))
 	d.AddHandler(handlers.NewInlineQuery(func(iq *gotgbot.InlineQuery) bool {
 		return true
 	}, h.inlineQuery))
