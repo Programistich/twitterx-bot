@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"regexp"
 	"strings"
 	"time"
 
@@ -11,10 +10,11 @@ import (
 
 	"twitterx-bot/internal/logger"
 	"twitterx-bot/internal/tweet"
+	"twitterx-bot/internal/twitterurl"
 	"twitterx-bot/internal/twitterxapi"
 )
 
-var twitterURLRegex = regexp.MustCompile(`(?:https?://)?(?:www\.)?(?:twitter\.com|x\.com)/([^/]+)/status/(\d+)`)
+var twitterURLRegex = twitterurl.TweetURLRegex
 
 type Handlers struct {
 	log *logger.Logger
