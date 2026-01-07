@@ -69,8 +69,12 @@ func TestBuildInlineResult(t *testing.T) {
 				if video.MimeType != "video/mp4" {
 					t.Errorf("video.MimeType = %q, want %q", video.MimeType, "video/mp4")
 				}
-				if video.Caption != "Hello\n\nhttps://x.com/1" {
-					t.Errorf("video.Caption = %q, want %q", video.Caption, "Hello\n\nhttps://x.com/1")
+				wantCaption := "<a href=\"https://x.com/1\">Tweet</a> from <a href=\"https://x.com/alice\">@alice</a>\n\nHello"
+				if video.Caption != wantCaption {
+					t.Errorf("video.Caption = %q, want %q", video.Caption, wantCaption)
+				}
+				if video.ParseMode != "HTML" {
+					t.Errorf("video.ParseMode = %q, want %q", video.ParseMode, "HTML")
 				}
 				if video.Description != "Hello" {
 					t.Errorf("video.Description = %q, want %q", video.Description, "Hello")
@@ -125,8 +129,12 @@ func TestBuildInlineResult(t *testing.T) {
 				if photo.Description != "Photo" {
 					t.Errorf("photo.Description = %q, want %q", photo.Description, "Photo")
 				}
-				if photo.Caption != "Photo" {
-					t.Errorf("photo.Caption = %q, want %q", photo.Caption, "Photo")
+				wantCaption := "Tweet from Bob\n\nPhoto"
+				if photo.Caption != wantCaption {
+					t.Errorf("photo.Caption = %q, want %q", photo.Caption, wantCaption)
+				}
+				if photo.ParseMode != "HTML" {
+					t.Errorf("photo.ParseMode = %q, want %q", photo.ParseMode, "HTML")
 				}
 			},
 		},
@@ -157,8 +165,12 @@ func TestBuildInlineResult(t *testing.T) {
 				if !ok {
 					t.Fatalf("expected InputTextMessageContent, got %#v", article.InputMessageContent)
 				}
-				if textContent.MessageText != "Hello\n\nhttps://x.com/1" {
-					t.Errorf("article.MessageText = %q, want %q", textContent.MessageText, "Hello\n\nhttps://x.com/1")
+				wantText := "<a href=\"https://x.com/1\">Tweet</a> from <a href=\"https://x.com/user\">@user</a>\n\nHello"
+				if textContent.MessageText != wantText {
+					t.Errorf("article.MessageText = %q, want %q", textContent.MessageText, wantText)
+				}
+				if textContent.ParseMode != "HTML" {
+					t.Errorf("textContent.ParseMode = %q, want %q", textContent.ParseMode, "HTML")
 				}
 				if article.Url != "https://x.com/1" {
 					t.Errorf("article.Url = %q, want %q", article.Url, "https://x.com/1")
@@ -172,16 +184,28 @@ func TestBuildInlineResult(t *testing.T) {
 			},
 		},
 		{
-			name: "empty message yields no result",
+			name: "empty text still yields result with author header",
 			tweet: &twitterxapi.Tweet{
 				Text:   "   ",
 				URL:    " ",
 				Author: twitterxapi.Author{ScreenName: "user"},
 			},
-			wantOK: false,
+			wantOK: true,
 			assert: func(t *testing.T, result gotgbot.InlineQueryResult) {
-				if result != nil {
-					t.Fatalf("expected nil result, got %#v", result)
+				article, ok := result.(gotgbot.InlineQueryResultArticle)
+				if !ok {
+					t.Fatalf("expected article result, got %#v", result)
+				}
+				textContent, ok := article.InputMessageContent.(gotgbot.InputTextMessageContent)
+				if !ok {
+					t.Fatalf("expected InputTextMessageContent, got %#v", article.InputMessageContent)
+				}
+				wantText := "Tweet from <a href=\"https://x.com/user\">@user</a>"
+				if textContent.MessageText != wantText {
+					t.Errorf("textContent.MessageText = %q, want %q", textContent.MessageText, wantText)
+				}
+				if textContent.ParseMode != "HTML" {
+					t.Errorf("textContent.ParseMode = %q, want %q", textContent.ParseMode, "HTML")
 				}
 			},
 		},

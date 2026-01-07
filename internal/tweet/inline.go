@@ -49,7 +49,8 @@ func (b InlineBuilder) Build(tweet *twitterxapi.Tweet, fallbackID string) (gotgb
 				VideoUrl:     videoURL,
 				MimeType:     MimeTypeForVideo(video.Format),
 				ThumbnailUrl: thumbURL,
-				Caption:      f.Caption(tweet),
+				Caption:      f.HTMLCaption(tweet),
+				ParseMode:    "HTML",
 				Description:  description,
 				VideoWidth:   int64(video.Width),
 				VideoHeight:  int64(video.Height),
@@ -71,12 +72,13 @@ func (b InlineBuilder) Build(tweet *twitterxapi.Tweet, fallbackID string) (gotgb
 				PhotoHeight:  int64(height),
 				Title:        title,
 				Description:  description,
-				Caption:      f.Caption(tweet),
+				Caption:      f.HTMLCaption(tweet),
+				ParseMode:    "HTML",
 			}, true
 		}
 	}
 
-	message := f.MessageText(tweet)
+	message := f.HTMLMessageText(tweet)
 	if message == "" {
 		return nil, false
 	}
@@ -91,6 +93,7 @@ func (b InlineBuilder) Build(tweet *twitterxapi.Tweet, fallbackID string) (gotgb
 		Title: title,
 		InputMessageContent: gotgbot.InputTextMessageContent{
 			MessageText: message,
+			ParseMode:   "HTML",
 		},
 		Url:          strings.TrimSpace(tweet.URL),
 		Description:  description,
