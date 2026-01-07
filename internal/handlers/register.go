@@ -12,11 +12,13 @@ import (
 	"twitterx-bot/internal/telegram/tweet"
 	"twitterx-bot/internal/twitterurl"
 	"twitterx-bot/internal/twitterxapi"
+	"twitterx-bot/internal/usecase/tweetsvc"
 )
 
 type Handlers struct {
 	log *logger.Logger
 	api *twitterxapi.Client
+	svc *tweetsvc.Service
 }
 
 const (
@@ -28,7 +30,11 @@ func Register(d *ext.Dispatcher, log *logger.Logger, api *twitterxapi.Client) {
 	if api == nil {
 		api = twitterxapi.NewClient("")
 	}
-	h := &Handlers{log: log, api: api}
+	h := &Handlers{
+		log: log,
+		api: api,
+		svc: tweetsvc.New(api, nil),
+	}
 
 	d.AddHandler(handlers.NewCommand("start", start))
 	d.AddHandler(handlers.NewInlineQuery(func(iq *gotgbot.InlineQuery) bool {

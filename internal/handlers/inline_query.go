@@ -7,7 +7,6 @@ import (
 	"github.com/PaulSonOfLars/gotgbot/v2"
 	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 
-	"twitterx-bot/internal/telegram/tweet"
 	"twitterx-bot/internal/twitterurl"
 )
 
@@ -32,7 +31,7 @@ func (h *Handlers) inlineQuery(b *gotgbot.Bot, ctx *ext.Context) error {
 	reqCtx, cancel := context.WithTimeout(context.Background(), inlineQueryTimeout)
 	defer cancel()
 
-	tw, err := h.api.GetTweet(reqCtx, username, tweetID)
+	result, ok, err := h.svc.BuildInlineResult(reqCtx, username, tweetID)
 	if err != nil {
 		h.log.Error("failed to fetch tweet %s for %s: %v", tweetID, username, err)
 		_, answerErr := ctx.InlineQuery.Answer(b, nil, &gotgbot.AnswerInlineQueryOpts{
@@ -45,7 +44,6 @@ func (h *Handlers) inlineQuery(b *gotgbot.Bot, ctx *ext.Context) error {
 		return nil
 	}
 
-	result, ok := tweet.BuildInlineResult(tw, tweetID)
 	if !ok {
 		h.log.Error("no suitable inline result for tweet %s", tweetID)
 		_, answerErr := ctx.InlineQuery.Answer(b, nil, &gotgbot.AnswerInlineQueryOpts{

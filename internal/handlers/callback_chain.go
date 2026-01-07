@@ -6,7 +6,6 @@ import (
 	"github.com/PaulSonOfLars/gotgbot/v2"
 	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 
-	"twitterx-bot/internal/chain"
 	"twitterx-bot/internal/telegram/tweet"
 )
 
@@ -35,17 +34,10 @@ func (h *Handlers) chainCallback(b *gotgbot.Bot, ctx *ext.Context) error {
 	reqCtx, cancel := context.WithTimeout(context.Background(), chainTimeout)
 	defer cancel()
 
-	// Fetch the tweet
-	tw, err := h.api.GetTweet(reqCtx, username, tweetID)
-	if err != nil {
-		h.log.Error("failed to fetch tweet %s for %s: %v", tweetID, username, err)
-		return nil
-	}
-
-	// Build the chain
-	items, err := chain.BuildChain(reqCtx, h.api, tw)
-	if err != nil {
-		h.log.Error("failed to build chain for tweet %s: %v", tweetID, err)
+	chatID := ctx.EffectiveChat.Id
+	svc := h.svc.WithSender(tweet.Sender{Bot: b})
+	if err := svc.SendChain(reqCtx, chatID, replyToMsgID, username, tweetID, userDisplayName(&cb.From)); err != nil {
+		h.log.Error("failed to send chain for tweet %s: %v", tweetID, err)
 		return nil
 	}
 
@@ -54,10 +46,5 @@ func (h *Handlers) chainCallback(b *gotgbot.Bot, ctx *ext.Context) error {
 		h.log.Debug("failed to delete original message: %v", delErr)
 	}
 
-	// Send the chain, replying to the user's message
-	chatID := ctx.EffectiveChat.Id
-	chainOpts := &tweet.SendChainResponseOpts{
-		RequesterUsername: userDisplayName(&cb.From),
-	}
-	return tweet.SendChainResponse(b, chatID, items, replyToMsgID, chainOpts)
+	return nil
 }
