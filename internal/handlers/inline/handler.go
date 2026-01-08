@@ -28,11 +28,18 @@ func New(log *logger.Logger, uc *inlineuc.UseCase, timeout time.Duration) *Handl
 // Handle answers inline queries that contain Twitter URLs.
 func (h *Handler) Handle(b *gotgbot.Bot, ctx *ext.Context) error {
 	query := strings.TrimSpace(ctx.InlineQuery.Query)
-	h.log.Debug("received inline query: %s", query)
+	log := h.log.With("component", "inline")
+	if ctx.InlineQuery != nil {
+		log = log.With("inline_query_id", ctx.InlineQuery.Id)
+	}
+	if ctx.EffectiveUser != nil {
+		log = log.With("user_id", ctx.EffectiveUser.Id, "username", ctx.EffectiveUser.Username)
+	}
+	log.Debug("inline query received", "query", query)
 
 	username, tweetID, ok := twitterurl.ParseTweetURL(query)
 	if !ok {
-		h.log.Debug("no twitter URL found in query")
+		log.Debug("inline query ignored: no tweet url")
 		_, err := ctx.InlineQuery.Answer(b, nil, &gotgbot.AnswerInlineQueryOpts{
 			CacheTime:  0,
 			IsPersonal: true,
@@ -40,16 +47,15 @@ func (h *Handler) Handle(b *gotgbot.Bot, ctx *ext.Context) error {
 		return err
 	}
 
-	h.log.Info("twitter URL: %s", query)
-	h.log.Info("twitter URL parsed - username: %s, tweet_id: %s", username, tweetID)
-	h.log.Debug("full match details - query: %s, username: %s, tweet_id: %s", query, username, tweetID)
+	log.Info("tweet url parsed", "tweet_username", username, "tweet_id", tweetID)
+	log.Debug("inline query details", "query", query, "tweet_username", username, "tweet_id", tweetID)
 
 	reqCtx, cancel := context.WithTimeout(context.Background(), h.timeout)
 	defer cancel()
 
 	result, ok, err := h.uc.BuildInlineResult(reqCtx, username, tweetID)
 	if err != nil {
-		h.log.Error("failed to fetch tweet %s for %s: %v", tweetID, username, err)
+		log.Error("build inline result failed", "tweet_username", username, "tweet_id", tweetID, "err", err)
 		_, answerErr := ctx.InlineQuery.Answer(b, nil, &gotgbot.AnswerInlineQueryOpts{
 			CacheTime:  0,
 			IsPersonal: true,
@@ -61,7 +67,7 @@ func (h *Handler) Handle(b *gotgbot.Bot, ctx *ext.Context) error {
 	}
 
 	if !ok {
-		h.log.Error("no suitable inline result for tweet %s", tweetID)
+		log.Warn("no suitable inline result", "tweet_id", tweetID)
 		_, answerErr := ctx.InlineQuery.Answer(b, nil, &gotgbot.AnswerInlineQueryOpts{
 			CacheTime:  0,
 			IsPersonal: true,
@@ -78,5 +84,8 @@ func (h *Handler) Handle(b *gotgbot.Bot, ctx *ext.Context) error {
 		CacheTime:  0,
 		IsPersonal: true,
 	})
+	if err == nil {
+		log.Info("inline result sent", "tweet_id", tweetID)
+	}
 	return err
 }

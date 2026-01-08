@@ -36,28 +36,40 @@ func New(log *logger.Logger, fetcher TweetFetcher, timeout time.Duration, telegr
 // Handle processes incoming Telegram messages that contain Twitter URLs.
 func (h *Handler) Handle(b *gotgbot.Bot, ctx *ext.Context) error {
 	text := strings.TrimSpace(ctx.EffectiveMessage.Text)
-	h.log.Debug("received message with twitter URL: %s", text)
+	log := h.log.With("component", "message")
+	if ctx.EffectiveChat != nil {
+		log = log.With("chat_id", ctx.EffectiveChat.Id)
+	}
+	if ctx.EffectiveUser != nil {
+		log = log.With("user_id", ctx.EffectiveUser.Id, "username", ctx.EffectiveUser.Username)
+	}
+	if ctx.EffectiveMessage != nil {
+		log = log.With("message_id", ctx.EffectiveMessage.MessageId)
+	}
+	log.Debug("message received", "text", text)
 
 	username, tweetID, ok := twitterurl.ParseTweetURL(text)
 	if !ok {
+		log.Debug("message ignored: no tweet url")
 		return nil
 	}
 
-	h.log.Info("twitter URL from message - username: %s, tweet_id: %s", username, tweetID)
+	log.Info("tweet url parsed", "tweet_username", username, "tweet_id", tweetID)
 
 	reqCtx, cancel := context.WithTimeout(context.Background(), h.timeout)
 	defer cancel()
 
 	_, err := b.SendChatAction(ctx.EffectiveChat.Id, gotgbot.ChatActionTyping, &gotgbot.SendChatActionOpts{})
 	if err != nil {
-		h.log.Debug("failed to send typing action: %v", err)
+		log.Debug("send chat action failed", "err", err)
 	}
 
-	uc := sendtweet.New(h.fetcher, tweet.Sender{Bot: b, Telegraph: h.telegraph})
+	uc := sendtweet.New(h.fetcher, tweet.Sender{Bot: b, Telegraph: h.telegraph, Log: log})
 	if sendErr := uc.SendTweet(reqCtx, ctx.EffectiveChat.Id, ctx.EffectiveMessage.MessageId, username, tweetID, shared.UserDisplayName(ctx.EffectiveUser)); sendErr != nil {
-		h.log.Error("failed to send tweet %s for %s: %v", tweetID, username, sendErr)
+		log.Error("send tweet failed", "tweet_username", username, "tweet_id", tweetID, "err", sendErr)
 		return nil
 	}
 
+	log.Info("tweet sent", "tweet_username", username, "tweet_id", tweetID)
 	return nil
 }

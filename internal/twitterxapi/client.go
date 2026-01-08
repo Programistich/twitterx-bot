@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -95,37 +96,48 @@ func (c *Client) GetTweet(ctx context.Context, username, tweetID string) (*Tweet
 		return nil, errors.New("tweet id is required")
 	}
 
+	log := slog.Default().With("component", "twitterxapi", "tweet_username", username, "tweet_id", tweetID)
+
 	reqURL := fmt.Sprintf("%s/api/users/%s/tweets/%s", c.baseURL, url.PathEscape(username), url.PathEscape(tweetID))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
+		log.Error("build request failed", "err", err)
 		return nil, fmt.Errorf("build request: %w", err)
 	}
 
+	log.Debug("fetch tweet", "url", reqURL)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		log.Error("fetch tweet failed", "err", err)
 		return nil, fmt.Errorf("fetch tweet: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		log.Error("read response failed", "err", err)
 		return nil, fmt.Errorf("read response: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		log.Warn("unexpected status code", "status", resp.StatusCode, "body_len", len(body))
 		return nil, fmt.Errorf("api status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var tweetResp TweetResponse
 	if err := json.Unmarshal(body, &tweetResp); err != nil {
+		log.Error("decode response failed", "err", err)
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 	if tweetResp.Code != http.StatusOK {
+		log.Warn("api error response", "code", tweetResp.Code, "message", tweetResp.Message)
 		return nil, fmt.Errorf("api error %d: %s", tweetResp.Code, tweetResp.Message)
 	}
 	if tweetResp.Tweet == nil {
+		log.Error("api response missing tweet")
 		return nil, errors.New("api response missing tweet")
 	}
 
+	log.Info("tweet fetched", "tweet_url", tweetResp.Tweet.URL)
 	return tweetResp.Tweet, nil
 }

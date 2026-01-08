@@ -26,6 +26,8 @@ func NewBot() (*gotgbot.Bot, *ext.Updater, *logger.Logger, error) {
 	}
 
 	l := logger.New(cfg.Debug)
+	log := l.With("component", "app")
+	log.Info("config loaded", "debug", cfg.Debug, "twitterx_api_url", cfg.TwitterXAPIURL, "telegram_api_url", cfg.TelegramAPIURL)
 
 	// Initialize Telegraph service if enabled
 	var telegraphService *telegraph.Service
@@ -36,8 +38,7 @@ func NewBot() (*gotgbot.Bot, *ext.Updater, *logger.Logger, error) {
 	opts = append(opts, telegraph.WithAuthorName(cfg.TelegraphAuthorName))
 	opts = append(opts, telegraph.WithAuthorURL(cfg.TelegraphAuthorURL))
 	telegraphService = telegraph.NewService(telegraphClient, opts...)
-	l.Info("Telegraph integration enabled")
-
+	log.Info("telegraph integration enabled", "author_name", cfg.TelegraphAuthorName, "author_url", cfg.TelegraphAuthorURL)
 
 	botOpts := &gotgbot.BotOpts{}
 	if cfg.TelegramAPIURL != "" {
@@ -55,7 +56,16 @@ func NewBot() (*gotgbot.Bot, *ext.Updater, *logger.Logger, error) {
 
 	dispatcher := ext.NewDispatcher(&ext.DispatcherOpts{
 		Error: func(b *gotgbot.Bot, ctx *ext.Context, err error) ext.DispatcherAction {
-			l.Error("handler error: %v", err)
+			dlog := l.With("component", "dispatcher")
+			if ctx != nil {
+				if ctx.EffectiveChat != nil {
+					dlog = dlog.With("chat_id", ctx.EffectiveChat.Id)
+				}
+				if ctx.EffectiveUser != nil {
+					dlog = dlog.With("user_id", ctx.EffectiveUser.Id, "username", ctx.EffectiveUser.Username)
+				}
+			}
+			dlog.Error("handler error", "err", err)
 			return ext.DispatcherActionNoop
 		},
 	})
@@ -74,32 +84,29 @@ func Start(bot *gotgbot.Bot, updater *ext.Updater, l *logger.Logger) error {
 	if updater == nil {
 		return fmt.Errorf("start bot: updater is nil")
 	}
+	log := l.With("component", "app")
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	if _, err := bot.SetMyName(&gotgbot.SetMyNameOpts{Name: "TwitterX"}); err != nil {
-		if l != nil {
-			l.Error("set bot name: %v", err)
-		}
+		log.Error("set bot name failed", "err", err)
 	}
 	if _, err := bot.SetMyDescription(&gotgbot.SetMyDescriptionOpts{
 		Description: "Telegram Bot for best read twitter/X tweets https://github.com/Programistich/twitterx-bot",
 	}); err != nil {
-		if l != nil {
-			l.Error("set bot description: %v", err)
-		}
+		log.Error("set bot description failed", "err", err)
 	}
 
 	if err := updater.StartPolling(bot, &ext.PollingOpts{DropPendingUpdates: true}); err != nil {
 		return fmt.Errorf("start polling: %w", err)
 	}
-	if l != nil {
-		l.Info("bot started as @%s", bot.User.Username)
-	}
+	log.Info("bot started", "username", bot.User.Username)
 
 	<-ctx.Done()
+	log.Info("shutdown signal received")
 	updater.Stop()
+	log.Info("updater stopped")
 	return nil
 }
 

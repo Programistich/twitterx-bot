@@ -9,6 +9,7 @@ import (
 	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 
 	"twitterx-bot/internal/chain"
+	"twitterx-bot/internal/logger"
 	"twitterx-bot/internal/twitterxapi"
 )
 
@@ -31,6 +32,7 @@ type Sender struct {
 	Bot       BotAPI
 	Formatter Formatter
 	Telegraph ArticleCreator // Optional: for creating articles when text is too long
+	Log       *logger.Logger
 }
 
 // SendResponse sends a single tweet reply to the chat message in ctx.
@@ -43,10 +45,17 @@ func (s Sender) SendResponse(ctx *ext.Context, tweet *twitterxapi.Tweet, opts *S
 
 // SendTweet sends a single tweet response to the given chat.
 func (s Sender) SendTweet(_ context.Context, chatID, replyToMsgID int64, tweet *twitterxapi.Tweet, opts *SendResponseOpts) error {
+	log := s.log().With("component", "tweet_sender", "chat_id", chatID)
+	if tweet != nil {
+		log = log.With("tweet_id", tweet.ID)
+	}
+
 	if tweet == nil {
+		log.Warn("send tweet skipped: tweet is nil")
 		return nil
 	}
 	if s.Bot == nil {
+		log.Error("send tweet failed: bot is nil")
 		return errors.New("tweet sender: bot is nil")
 	}
 
@@ -65,12 +74,21 @@ func (s Sender) SendTweet(_ context.Context, chatID, replyToMsgID int64, tweet *
 		requesterUsername = opts.RequesterUsername
 	}
 
-	_, err := s.sendTweetMessage(chatID, tweet, &sendTweetMessageOpts{
+	msg, err := s.sendTweetMessage(chatID, tweet, &sendTweetMessageOpts{
 		ReplyParams:       replyParams,
 		ReplyMarkup:       replyMarkup,
 		RequesterUsername: requesterUsername,
 	})
-	return err
+	if err != nil {
+		log.Error("send tweet failed", "err", err)
+		return err
+	}
+	if msg != nil {
+		log.Info("tweet sent", "message_id", msg.MessageId)
+	} else {
+		log.Info("tweet sent")
+	}
+	return nil
 }
 
 // sendTweetMessageOpts contains options for sendTweetMessage.
@@ -91,6 +109,10 @@ func (s Sender) sendTweetMessage(chatID int64, tweet *twitterxapi.Tweet, opts *s
 	}
 
 	f := s.Formatter.withDefaults()
+	log := s.log().With("component", "tweet_sender", "chat_id", chatID)
+	if tweet != nil {
+		log = log.With("tweet_id", tweet.ID)
+	}
 
 	// Check if we need Telegraph for long text
 	caption := s.prepareCaption(context.Background(), tweet, opts.RequesterUsername, f)
@@ -99,6 +121,7 @@ func (s Sender) sendTweetMessage(chatID int64, tweet *twitterxapi.Tweet, opts *s
 	if tweet.Media != nil && len(tweet.Media.Videos) > 0 {
 		video := tweet.Media.Videos[0]
 		if video.URL != "" {
+			log.Debug("sending video tweet", "width", video.Width, "height", video.Height)
 			videoOpts := &gotgbot.SendVideoOpts{
 				Caption:         caption,
 				ParseMode:       "HTML",
@@ -136,6 +159,7 @@ func (s Sender) sendTweetMessage(chatID int64, tweet *twitterxapi.Tweet, opts *s
 		}
 
 		if len(mediaGroup) > 0 {
+			log.Debug("sending photo group", "count", len(mediaGroup))
 			// SendMediaGroup returns []Message, use first for threading
 			msgs, err := s.Bot.SendMediaGroup(chatID, mediaGroup, &gotgbot.SendMediaGroupOpts{
 				ReplyParameters: opts.ReplyParams,
@@ -154,6 +178,7 @@ func (s Sender) sendTweetMessage(chatID int64, tweet *twitterxapi.Tweet, opts *s
 	if tweet.Media != nil && len(tweet.Media.Photos) == 1 {
 		photo := tweet.Media.Photos[0]
 		if photo.URL != "" {
+			log.Debug("sending single photo")
 			photoOpts := &gotgbot.SendPhotoOpts{
 				Caption:         caption,
 				ParseMode:       "HTML",
@@ -169,6 +194,7 @@ func (s Sender) sendTweetMessage(chatID int64, tweet *twitterxapi.Tweet, opts *s
 	// Priority 4: Text only
 	message := f.HTMLMessageTextWithRequester(tweet, opts.RequesterUsername)
 	if message != "" {
+		log.Debug("sending text tweet", "text_len", len(message))
 		msgOpts := &gotgbot.SendMessageOpts{
 			ParseMode:       "HTML",
 			ReplyParameters: opts.ReplyParams,
@@ -186,6 +212,10 @@ func (s Sender) sendTweetMessage(chatID int64, tweet *twitterxapi.Tweet, opts *s
 // If Telegraph is configured and the text exceeds limits, it creates a Telegraph article.
 func (s Sender) prepareCaption(ctx context.Context, tweet *twitterxapi.Tweet, requesterUsername string, f Formatter) string {
 	baseCaption := f.HTMLContentWithRequester(tweet, requesterUsername)
+	log := s.log().With("component", "tweet_sender")
+	if tweet != nil {
+		log = log.With("tweet_id", tweet.ID)
+	}
 
 	// If no Telegraph configured or text fits, use regular caption
 	if s.Telegraph == nil || len(baseCaption) <= MaxCaptionLength {
@@ -198,12 +228,14 @@ func (s Sender) prepareCaption(ctx context.Context, tweet *twitterxapi.Tweet, re
 
 	articleURL, err := s.Telegraph.CreateArticle(ctx, fullText, title)
 	if err != nil {
+		log.Warn("telegraph article failed, falling back", "err", err)
 		// Fallback: truncate text and add link to original tweet
 		return s.fallbackCaption(tweet, requesterUsername, f)
 	}
 
 	// Success: truncate and add Telegraph link
 	truncatedCaption := TruncateHTML(baseCaption, MaxCaptionLength-60) // Reserve space for Telegraph link
+	log.Info("telegraph article created", "url", articleURL)
 	return fmt.Sprintf("%s\n\n📖 %s", truncatedCaption, articleURL)
 }
 
@@ -249,6 +281,7 @@ func (s Sender) SendChainResponse(chatID int64, items []chain.ChainItem, replyTo
 		opts = &SendChainResponseOpts{}
 	}
 
+	log := s.log().With("component", "tweet_sender", "chat_id", chatID, "chain_length", len(items))
 	prevMsgID := replyToMsgID
 
 	for i, item := range items {
@@ -278,23 +311,33 @@ func (s Sender) SendChainResponse(chatID int64, items []chain.ChainItem, replyTo
 
 		msg, err := s.sendTweetMessage(chatID, item.Tweet, msgOpts)
 		if err != nil {
+			log.Error("send chain message failed", "index", i, "err", err)
 			return err
 		}
 
 		if msg != nil {
 			prevMsgID = msg.MessageId
+			log.Debug("chain message sent", "index", i, "message_id", msg.MessageId)
 		}
 	}
 
+	log.Info("chain sent", "last_message_id", prevMsgID)
 	return nil
 }
 
 func SendResponse(b *gotgbot.Bot, ctx *ext.Context, tweet *twitterxapi.Tweet, opts *SendResponseOpts) error {
-	sender := Sender{Bot: b}
+	sender := Sender{Bot: b, Log: logger.Default()}
 	return sender.SendResponse(ctx, tweet, opts)
 }
 
 func SendChainResponse(b *gotgbot.Bot, chatID int64, items []chain.ChainItem, replyToMsgID int64, opts *SendChainResponseOpts) error {
-	sender := Sender{Bot: b}
+	sender := Sender{Bot: b, Log: logger.Default()}
 	return sender.SendChainResponse(chatID, items, replyToMsgID, opts)
+}
+
+func (s Sender) log() *logger.Logger {
+	if s.Log != nil {
+		return s.Log
+	}
+	return logger.Default()
 }
