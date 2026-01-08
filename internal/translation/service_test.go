@@ -128,13 +128,6 @@ func TestLanguageFromISO(t *testing.T) {
 		{"UK", LangUkrainian},
 		{"en", LangEnglish},
 		{"ru", LangRussian},
-		{"de", LangGerman},
-		{"fr", LangFrench},
-		{"es", LangSpanish},
-		{"it", LangItalian},
-		{"pl", LangPolish},
-		{"ja", LangJapanese},
-		{"zh", LangChinese},
 		{"unknown", Language{ISO: "unknown"}},
 	}
 

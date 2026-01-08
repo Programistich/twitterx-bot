@@ -15,19 +15,19 @@ const (
 	DefaultTimeout = 10
 )
 
-// Translator інтерфейс для сервісу перекладання
+// Translator defines the interface for the translation service.
 type Translator interface {
 	Translate(ctx context.Context, text string, to Language) (*Translation, error)
 }
 
-// Service - сервіс перекладання через Google Translate
+// Service provides translations via Google Translate.
 type Service struct {
 	httpClient *http.Client
 	baseURL    string
 	log        *slog.Logger
 }
 
-// NewService створює новий сервіс перекладання
+// NewService creates a new translation service.
 func NewService(httpClient *http.Client, baseURL string) *Service {
 	if baseURL == "" {
 		baseURL = DefaultBaseURL
@@ -39,7 +39,7 @@ func NewService(httpClient *http.Client, baseURL string) *Service {
 	}
 }
 
-// Translate перекладає текст на вказану мову
+// Translate translates text into the specified language.
 func (s *Service) Translate(ctx context.Context, text string, to Language) (*Translation, error) {
 	s.log.Debug("starting translation request",
 		"text_length", len(text),
@@ -115,7 +115,7 @@ func (s *Service) Translate(ctx context.Context, text string, to Language) (*Tra
 	return translation, nil
 }
 
-// LanguageFromISO повертає Language за ISO кодом
+// LanguageFromISO returns a Language for the given ISO code.
 func LanguageFromISO(iso string) Language {
 	switch strings.ToLower(iso) {
 	case "uk":
@@ -124,20 +124,6 @@ func LanguageFromISO(iso string) Language {
 		return LangEnglish
 	case "ru":
 		return LangRussian
-	case "de":
-		return LangGerman
-	case "fr":
-		return LangFrench
-	case "es":
-		return LangSpanish
-	case "it":
-		return LangItalian
-	case "pl":
-		return LangPolish
-	case "ja":
-		return LangJapanese
-	case "zh":
-		return LangChinese
 	default:
 		return Language{ISO: iso}
 	}
