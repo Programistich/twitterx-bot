@@ -22,14 +22,15 @@ type TweetFetcher interface {
 
 // Handler encapsulates the dependencies required for processing message-based tweets.
 type Handler struct {
-	log     *logger.Logger
-	fetcher TweetFetcher
-	timeout time.Duration
+	log       *logger.Logger
+	fetcher   TweetFetcher
+	timeout   time.Duration
+	telegraph tweet.ArticleCreator
 }
 
 // New creates a new message handler with the supplied logger, tweet fetcher, and timeout.
-func New(log *logger.Logger, fetcher TweetFetcher, timeout time.Duration) *Handler {
-	return &Handler{log: log, fetcher: fetcher, timeout: timeout}
+func New(log *logger.Logger, fetcher TweetFetcher, timeout time.Duration, telegraph tweet.ArticleCreator) *Handler {
+	return &Handler{log: log, fetcher: fetcher, timeout: timeout, telegraph: telegraph}
 }
 
 // Handle processes incoming Telegram messages that contain Twitter URLs.
@@ -52,7 +53,7 @@ func (h *Handler) Handle(b *gotgbot.Bot, ctx *ext.Context) error {
 		h.log.Debug("failed to send typing action: %v", err)
 	}
 
-	uc := sendtweet.New(h.fetcher, tweet.Sender{Bot: b})
+	uc := sendtweet.New(h.fetcher, tweet.Sender{Bot: b, Telegraph: h.telegraph})
 	if sendErr := uc.SendTweet(reqCtx, ctx.EffectiveChat.Id, ctx.EffectiveMessage.MessageId, username, tweetID, shared.UserDisplayName(ctx.EffectiveUser)); sendErr != nil {
 		h.log.Error("failed to send tweet %s for %s: %v", tweetID, username, sendErr)
 		return nil

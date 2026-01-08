@@ -3,6 +3,7 @@ package tweet
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/PaulSonOfLars/gotgbot/v2"
 	"github.com/PaulSonOfLars/gotgbot/v2/ext"
@@ -29,6 +30,7 @@ type SendResponseOpts struct {
 type Sender struct {
 	Bot       BotAPI
 	Formatter Formatter
+	Telegraph ArticleCreator // Optional: for creating articles when text is too long
 }
 
 // SendResponse sends a single tweet reply to the chat message in ctx.
@@ -89,7 +91,9 @@ func (s Sender) sendTweetMessage(chatID int64, tweet *twitterxapi.Tweet, opts *s
 	}
 
 	f := s.Formatter.withDefaults()
-	caption := f.HTMLCaptionWithRequester(tweet, opts.RequesterUsername)
+
+	// Check if we need Telegraph for long text
+	caption := s.prepareCaption(context.Background(), tweet, opts.RequesterUsername, f)
 
 	// Priority 1: Video
 	if tweet.Media != nil && len(tweet.Media.Videos) > 0 {
@@ -176,6 +180,54 @@ func (s Sender) sendTweetMessage(chatID int64, tweet *twitterxapi.Tweet, opts *s
 	}
 
 	return nil, nil
+}
+
+// prepareCaption creates the caption text for a tweet.
+// If Telegraph is configured and the text exceeds limits, it creates a Telegraph article.
+func (s Sender) prepareCaption(ctx context.Context, tweet *twitterxapi.Tweet, requesterUsername string, f Formatter) string {
+	baseCaption := f.HTMLContentWithRequester(tweet, requesterUsername)
+
+	// If no Telegraph configured or text fits, use regular caption
+	if s.Telegraph == nil || len(baseCaption) <= MaxCaptionLength {
+		return f.HTMLCaptionWithRequester(tweet, requesterUsername)
+	}
+
+	// Text is too long, try Telegraph
+	title := f.Title(tweet)
+	fullText := f.Content(tweet)
+
+	articleURL, err := s.Telegraph.CreateArticle(ctx, fullText, title)
+	if err != nil {
+		// Fallback: truncate text and add link to original tweet
+		return s.fallbackCaption(tweet, requesterUsername, f)
+	}
+
+	// Success: truncate and add Telegraph link
+	truncatedCaption := TruncateHTML(baseCaption, MaxCaptionLength-60) // Reserve space for Telegraph link
+	return fmt.Sprintf("%s\n\n📖 %s", truncatedCaption, articleURL)
+}
+
+// fallbackCaption creates a truncated caption with link to original tweet.
+// Used when Telegraph is unavailable or fails.
+func (s Sender) fallbackCaption(tweet *twitterxapi.Tweet, requesterUsername string, f Formatter) string {
+	if tweet == nil {
+		return ""
+	}
+
+	caption := f.HTMLCaptionWithRequester(tweet, requesterUsername)
+
+	// If text fits, return as-is
+	if len(caption) <= MaxCaptionLength {
+		return caption
+	}
+
+	// Truncate and add link to original
+	if tweet.URL != "" {
+		truncated := TruncateHTML(caption, MaxCaptionLength-50)
+		return fmt.Sprintf("%s\n\n📎 %s", truncated, tweet.URL)
+	}
+
+	return TruncateHTML(caption, MaxCaptionLength)
 }
 
 // SendChainResponseOpts contains options for SendChainResponse.

@@ -4,6 +4,7 @@ package testutil
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/PaulSonOfLars/gotgbot/v2"
@@ -11,6 +12,7 @@ import (
 
 	"twitterx-bot/internal/handlers"
 	"twitterx-bot/internal/logger"
+	"twitterx-bot/internal/telegram/tweet"
 	"twitterx-bot/internal/twitterxapi"
 	testtelegram "twitterx-bot/pkg/testutil/telegram"
 )
@@ -45,6 +47,11 @@ func NewTestBot(t *testing.T, mock *testtelegram.MockServer) *gotgbot.Bot {
 
 // SetupBotAndDispatcher wires the handlers to a dispatcher and returns the mock bot, mock server, and dispatcher.
 func SetupBotAndDispatcher(t *testing.T, fakeAPI *FakeTweetAPI) (*gotgbot.Bot, *testtelegram.MockServer, *ext.Dispatcher) {
+	return SetupBotAndDispatcherWithTelegraph(t, fakeAPI, nil)
+}
+
+// SetupBotAndDispatcherWithTelegraph wires the handlers to a dispatcher with an optional Telegraph service.
+func SetupBotAndDispatcherWithTelegraph(t *testing.T, fakeAPI *FakeTweetAPI, telegraph tweet.ArticleCreator) (*gotgbot.Bot, *testtelegram.MockServer, *ext.Dispatcher) {
 	t.Helper()
 	if fakeAPI == nil {
 		fakeAPI = &FakeTweetAPI{}
@@ -62,7 +69,7 @@ func SetupBotAndDispatcher(t *testing.T, fakeAPI *FakeTweetAPI) (*gotgbot.Bot, *
 		},
 	})
 
-	handlers.RegisterWithFetcher(dispatcher, logger.New(true), fakeAPI)
+	handlers.RegisterWithFetcher(dispatcher, logger.New(true), fakeAPI, telegraph)
 
 	return bot, mock, dispatcher
 }
@@ -108,4 +115,45 @@ func ContainsString(haystack, needle string) bool {
 		}
 	}
 	return false
+}
+
+// LongTweetText returns text that exceeds Telegram caption limits.
+func LongTweetText(repeatChar byte) string {
+	return strings.Repeat(string(repeatChar), tweet.MaxCaptionLength+200)
+}
+
+// LongTweet returns a tweet with text longer than Telegram caption limits.
+// If photoURL is provided, it adds a single photo media item.
+func LongTweet(username, tweetID, url string, repeatChar byte, photoURL string) *twitterxapi.Tweet {
+	tw := &twitterxapi.Tweet{
+		ID:   tweetID,
+		URL:  url,
+		Text: LongTweetText(repeatChar),
+		Author: twitterxapi.Author{
+			Name:       username,
+			ScreenName: username,
+		},
+	}
+	if photoURL != "" {
+		tw.Media = &twitterxapi.Media{
+			Photos: []twitterxapi.Photo{
+				{URL: photoURL},
+			},
+		}
+	}
+	return tw
+}
+
+// ReplyTweet sets reply metadata on a tweet and returns the same tweet for chaining.
+func ReplyTweet(tw *twitterxapi.Tweet, replyingToStatus string, replyingToUsername string) *twitterxapi.Tweet {
+	if tw == nil {
+		return nil
+	}
+	if replyingToStatus != "" {
+		tw.ReplyingToStatus = &replyingToStatus
+	}
+	if replyingToUsername != "" {
+		tw.ReplyingTo = StrPtr(replyingToUsername)
+	}
+	return tw
 }

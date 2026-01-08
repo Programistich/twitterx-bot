@@ -11,6 +11,9 @@ type Config struct {
 	Debug          bool
 	TwitterXAPIURL string
 	TelegramAPIURL string
+
+	TelegraphAuthorName string
+	TelegraphAuthorURL  string
 }
 
 func Load() (Config, error) {
@@ -22,9 +25,12 @@ func Load() (Config, error) {
 		Debug:          os.Getenv("DEBUG") == "true" || os.Getenv("DEBUG") == "True" || os.Getenv("DEBUG") == "1",
 		TwitterXAPIURL: os.Getenv("TWITTERX_API_URL"),
 		TelegramAPIURL: telegramAPIURL,
+
+		TelegraphAuthorName: "TwitterX",
+		TelegraphAuthorURL:  "https://t.me/twitter_x_bot",
 	}
 	if cfg.TwitterXAPIURL == "" {
-		cfg.TwitterXAPIURL = "http://127.0.0.1:8080"
+		return Config{}, errors.New("TwitterXAPIURL is required")
 	}
 	if cfg.BotToken == "" {
 		return Config{}, errors.New("BOT_TOKEN is required")

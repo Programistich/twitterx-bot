@@ -3,9 +3,11 @@ package app
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/PaulSonOfLars/gotgbot/v2"
 	"github.com/PaulSonOfLars/gotgbot/v2/ext"
@@ -13,6 +15,7 @@ import (
 	"twitterx-bot/internal/config"
 	"twitterx-bot/internal/handlers"
 	"twitterx-bot/internal/logger"
+	"twitterx-bot/internal/telegraph"
 	"twitterx-bot/internal/twitterxapi"
 )
 
@@ -23,6 +26,18 @@ func NewBot() (*gotgbot.Bot, *ext.Updater, *logger.Logger, error) {
 	}
 
 	l := logger.New(cfg.Debug)
+
+	// Initialize Telegraph service if enabled
+	var telegraphService *telegraph.Service
+	telegraphClient := telegraph.NewClient(&http.Client{
+		Timeout: 30 * time.Second,
+	}, "")
+	opts := []telegraph.Option{}
+	opts = append(opts, telegraph.WithAuthorName(cfg.TelegraphAuthorName))
+	opts = append(opts, telegraph.WithAuthorURL(cfg.TelegraphAuthorURL))
+	telegraphService = telegraph.NewService(telegraphClient, opts...)
+	l.Info("Telegraph integration enabled")
+
 
 	botOpts := &gotgbot.BotOpts{}
 	if cfg.TelegramAPIURL != "" {
@@ -47,7 +62,7 @@ func NewBot() (*gotgbot.Bot, *ext.Updater, *logger.Logger, error) {
 	updater := ext.NewUpdater(dispatcher, &ext.UpdaterOpts{})
 
 	apiClient := twitterxapi.NewClient(cfg.TwitterXAPIURL)
-	handlers.Register(dispatcher, l, apiClient)
+	handlers.Register(dispatcher, l, apiClient, telegraphService)
 
 	return bot, updater, l, nil
 }

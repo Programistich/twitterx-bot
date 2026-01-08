@@ -212,6 +212,59 @@ func TestIntegration_MessageHandler_TweetWithReplyChain(t *testing.T) {
 	}
 }
 
+func TestIntegration_MessageHandler_UsesTelegraphForLongCaption(t *testing.T) {
+	tweetURL := "https://x.com/longuser/status/444444"
+	longTweet := testutil.LongTweet("longuser", "444444", tweetURL, 'a', "https://pbs.twimg.com/media/test.jpg")
+
+	fakeAPI := &testutil.FakeTweetAPI{
+		Tweets: map[string]*twitterxapi.Tweet{
+			"longuser/444444": longTweet,
+		},
+	}
+
+	telegraphMock := &testutil.FakeTelegraph{URL: "https://telegra.ph/test-123"}
+	bot, mock, dispatcher := testutil.SetupBotAndDispatcherWithTelegraph(t, fakeAPI, telegraphMock)
+
+	const (
+		chatID = int64(999000)
+		msgID  = int64(600)
+	)
+
+	update := gotgbot.Update{
+		UpdateId: 6,
+		Message: &gotgbot.Message{
+			MessageId: msgID,
+			Text:      tweetURL,
+			Chat:      gotgbot.Chat{Id: chatID, Type: "private"},
+			From:      &gotgbot.User{Id: 1006, FirstName: "Frank", Username: "frank"},
+			Date:      1000005,
+		},
+	}
+
+	if err := dispatcher.ProcessUpdate(bot, &update, nil); err != nil {
+		t.Fatalf("ProcessUpdate() error = %v", err)
+	}
+
+	if !telegraphMock.Called {
+		t.Fatalf("expected Telegraph CreateArticle to be called")
+	}
+	wantText := longTweet.Text + "\n\n" + tweetURL
+	if telegraphMock.GotText != wantText {
+		t.Fatalf("CreateArticle text = %q, want %q", telegraphMock.GotText, wantText)
+	}
+	if telegraphMock.GotTitle != "Tweet by @longuser" {
+		t.Fatalf("CreateArticle title = %q, want %q", telegraphMock.GotTitle, "Tweet by @longuser")
+	}
+
+	photoCalls := mock.GetCalls("sendPhoto")
+	if len(photoCalls) != 1 {
+		t.Fatalf("sendPhoto calls = %d, want 1", len(photoCalls))
+	}
+	if caption, ok := photoCalls[0].JSONString("caption"); !ok || !testutil.ContainsString(caption, telegraphMock.URL) {
+		t.Fatalf("sendPhoto caption should include Telegraph URL, got: %s", caption)
+	}
+}
+
 func TestIntegration_NonTwitterURL_NoResponse(t *testing.T) {
 	bot, mock, dispatcher := testutil.SetupBotAndDispatcher(t, &testutil.FakeTweetAPI{Tweets: map[string]*twitterxapi.Tweet{}})
 

@@ -23,11 +23,12 @@ type Handlers struct {
 	log          *logger.Logger
 	fetcher      TweetFetcher
 	chainTimeout time.Duration
+	telegraph    tweet.ArticleCreator
 }
 
 // New creates callback handlers with the configured logger, tweet fetcher, and chain timeout.
-func New(log *logger.Logger, fetcher TweetFetcher, chainTimeout time.Duration) *Handlers {
-	return &Handlers{log: log, fetcher: fetcher, chainTimeout: chainTimeout}
+func New(log *logger.Logger, fetcher TweetFetcher, chainTimeout time.Duration, telegraph tweet.ArticleCreator) *Handlers {
+	return &Handlers{log: log, fetcher: fetcher, chainTimeout: chainTimeout, telegraph: telegraph}
 }
 
 // Chain processes callback queries that request a tweet chain.
@@ -56,7 +57,7 @@ func (h *Handlers) Chain(b *gotgbot.Bot, ctx *ext.Context) error {
 	defer cancel()
 
 	chatID := ctx.EffectiveChat.Id
-	uc := sendchain.New(h.fetcher, tweet.Sender{Bot: b})
+	uc := sendchain.New(h.fetcher, tweet.Sender{Bot: b, Telegraph: h.telegraph})
 	if sendErr := uc.SendChain(reqCtx, chatID, replyToMsgID, username, tweetID, shared.UserDisplayName(&cb.From)); sendErr != nil {
 		h.log.Error("failed to send chain for tweet %s: %v", tweetID, sendErr)
 		return nil

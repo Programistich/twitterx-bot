@@ -31,16 +31,16 @@ type TweetFetcher interface {
 	GetTweet(ctx context.Context, username, tweetID string) (*twitterxapi.Tweet, error)
 }
 
-func Register(d *ext.Dispatcher, log *logger.Logger, api *twitterxapi.Client) {
+func Register(d *ext.Dispatcher, log *logger.Logger, api *twitterxapi.Client, telegraph tweet.ArticleCreator) {
 	if api == nil {
 		api = twitterxapi.NewClient("")
 	}
-	RegisterWithFetcher(d, log, api)
+	RegisterWithFetcher(d, log, api, telegraph)
 }
 
 // RegisterWithFetcher registers handlers using a custom TweetFetcher implementation.
 // This is useful for testing with mock implementations.
-func RegisterWithFetcher(d *ext.Dispatcher, log *logger.Logger, fetcher TweetFetcher) {
+func RegisterWithFetcher(d *ext.Dispatcher, log *logger.Logger, fetcher TweetFetcher, telegraph tweet.ArticleCreator) {
 	// Start and help commands
 	d.AddHandler(handlers.NewCommand("start", start.Handler))
 	d.AddHandler(handlers.NewCommand("help", start.Handler))
@@ -53,7 +53,7 @@ func RegisterWithFetcher(d *ext.Dispatcher, log *logger.Logger, fetcher TweetFet
 	}, inlineHandler.Handle))
 
 	// Message handler for Twitter URLs
-	messageHandler := message.New(log, fetcher, messageTimeout)
+	messageHandler := message.New(log, fetcher, messageTimeout, telegraph)
 	d.AddHandler(handlers.NewMessage(func(msg *gotgbot.Message) bool {
 		if msg.Text == "" {
 			return false
@@ -63,7 +63,7 @@ func RegisterWithFetcher(d *ext.Dispatcher, log *logger.Logger, fetcher TweetFet
 	}, messageHandler.Handle))
 
 	// Callback handlers
-	callbackHandlers := callback.New(log, fetcher, chainTimeout)
+	callbackHandlers := callback.New(log, fetcher, chainTimeout, telegraph)
 	d.AddHandler(handlers.NewCallback(func(cq *gotgbot.CallbackQuery) bool {
 		return strings.HasPrefix(cq.Data, tweet.ChainCallbackPrefix)
 	}, callbackHandlers.Chain))

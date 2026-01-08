@@ -92,6 +92,76 @@ func TestIntegration_ChainCallback_SendsMultipleMessages(t *testing.T) {
 	}
 }
 
+func TestIntegration_ChainCallback_UsesTelegraphForLongCaption(t *testing.T) {
+	parentID := "111111"
+	tweetURL := "https://x.com/chainuser/status/222222"
+	longTweet := testutil.ReplyTweet(
+		testutil.LongTweet("chainuser", "222222", tweetURL, 'b', "https://pbs.twimg.com/media/test.jpg"),
+		parentID,
+		"chainuser",
+	)
+
+	fakeAPI := &testutil.FakeTweetAPI{
+		Tweets: map[string]*twitterxapi.Tweet{
+			"chainuser/222222": longTweet,
+			"chainuser/111111": {
+				ID:     "111111",
+				URL:    "https://x.com/chainuser/status/111111",
+				Text:   "Parent tweet",
+				Author: twitterxapi.Author{Name: "Chain User", ScreenName: "chainuser"},
+			},
+		},
+	}
+
+	telegraphMock := &testutil.FakeTelegraph{URL: "https://telegra.ph/chain-test-123"}
+	bot, mock, dispatcher := testutil.SetupBotAndDispatcherWithTelegraph(t, fakeAPI, telegraphMock)
+
+	const (
+		chatID = int64(898989)
+		msgID  = int64(450)
+	)
+
+	callbackData := tweet.EncodeChainCallback("chainuser", "222222", msgID)
+	callbackMessage := &gotgbot.Message{
+		MessageId: 451,
+		Date:      1000006,
+		Chat:      gotgbot.Chat{Id: chatID, Type: "private"},
+	}
+
+	update := gotgbot.Update{
+		UpdateId: 7,
+		CallbackQuery: &gotgbot.CallbackQuery{
+			Id:      "cb-telegraph-chain",
+			Data:    callbackData,
+			From:    gotgbot.User{Id: 1007, FirstName: "Gina", Username: "gina"},
+			Message: callbackMessage,
+		},
+	}
+
+	if err := dispatcher.ProcessUpdate(bot, &update, nil); err != nil {
+		t.Fatalf("ProcessUpdate() error = %v", err)
+	}
+
+	if !telegraphMock.Called {
+		t.Fatalf("expected Telegraph CreateArticle to be called")
+	}
+	wantText := longTweet.Text + "\n\n" + tweetURL
+	if telegraphMock.GotText != wantText {
+		t.Fatalf("CreateArticle text = %q, want %q", telegraphMock.GotText, wantText)
+	}
+	if telegraphMock.GotTitle != "Tweet by @chainuser" {
+		t.Fatalf("CreateArticle title = %q, want %q", telegraphMock.GotTitle, "Tweet by @chainuser")
+	}
+
+	photoCalls := mock.GetCalls("sendPhoto")
+	if len(photoCalls) != 1 {
+		t.Fatalf("sendPhoto calls = %d, want 1", len(photoCalls))
+	}
+	if caption, ok := photoCalls[0].JSONString("caption"); !ok || !testutil.ContainsString(caption, telegraphMock.URL) {
+		t.Fatalf("sendPhoto caption should include Telegraph URL, got: %s", caption)
+	}
+}
+
 func TestIntegration_DeleteCallback_WithChainButton(t *testing.T) {
 	bot, mock, dispatcher := testutil.SetupBotAndDispatcher(t, &testutil.FakeTweetAPI{})
 
