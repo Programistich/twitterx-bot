@@ -198,6 +198,9 @@ func (s Sender) sendTweetMessage(chatID int64, tweet *twitterxapi.Tweet, opts *s
 		msgOpts := &gotgbot.SendMessageOpts{
 			ParseMode:       "HTML",
 			ReplyParameters: opts.ReplyParams,
+			LinkPreviewOptions: &gotgbot.LinkPreviewOptions{
+				IsDisabled: false,
+			},
 		}
 		if opts.ReplyMarkup != nil {
 			msgOpts.ReplyMarkup = opts.ReplyMarkup
@@ -236,7 +239,7 @@ func (s Sender) prepareCaption(ctx context.Context, tweet *twitterxapi.Tweet, re
 	// Success: truncate and add Telegraph link
 	truncatedCaption := TruncateHTML(baseCaption, MaxCaptionLength-60) // Reserve space for Telegraph link
 	log.Info("telegraph article created", "url", articleURL)
-	return fmt.Sprintf("%s\n\n📖 %s", truncatedCaption, articleURL)
+	return fmt.Sprintf("%s\n\n%s", truncatedCaption, articleURL)
 }
 
 // fallbackCaption creates a truncated caption with link to original tweet.
