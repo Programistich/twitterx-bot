@@ -12,3 +12,7 @@ Docker Compose lives in `infra/`.
 2) From repo root:
    - Development (local ports): `docker compose -f infra/docker-compose.yml -d --build`
    - Production (shared proxy network): `docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml up -d --build`
+
+## Code Navigation
+
+Use LSP tool for code navigation tasks like finding references, go to definition, and symbol search.
