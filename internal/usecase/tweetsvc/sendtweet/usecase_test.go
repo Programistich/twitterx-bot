@@ -8,6 +8,7 @@ import (
 
 	"github.com/PaulSonOfLars/gotgbot/v2"
 
+	"twitterx-bot/internal/chain"
 	"twitterx-bot/internal/telegram/tweet"
 	"twitterx-bot/internal/twitterxapi"
 )
@@ -269,5 +270,184 @@ func TestUseCaseSendTweetMissingDeps(t *testing.T) {
 	uc := &UseCase{}
 	if err := uc.SendTweet(context.Background(), 1, 1, "u", "t", ""); err == nil {
 		t.Fatalf("expected error for missing deps")
+	}
+}
+
+type fakeChainSender struct {
+	calls             int
+	lastChatID        int64
+	lastItems         []chain.ChainItem
+	lastReplyToMsgID  int64
+	lastOpts          *tweet.SendChainResponseOpts
+	err               error
+}
+
+func (f *fakeChainSender) SendChainResponse(chatID int64, items []chain.ChainItem, replyToMsgID int64, opts *tweet.SendChainResponseOpts) error {
+	f.calls++
+	f.lastChatID = chatID
+	f.lastItems = items
+	f.lastReplyToMsgID = replyToMsgID
+	f.lastOpts = opts
+	return f.err
+}
+
+func TestUseCaseSendTweetWithQuote_SendsChain(t *testing.T) {
+	quotedTweet := &twitterxapi.Tweet{
+		ID:   "quoted-1",
+		Text: "Original tweet",
+		URL:  "https://x.com/original/status/quoted-1",
+	}
+	fetcher := &fakeFetcher{
+		tweet: &twitterxapi.Tweet{
+			ID:    "123",
+			Text:  "Quote tweet",
+			URL:   "https://x.com/user/status/123",
+			Quote: quotedTweet,
+		},
+	}
+	bot := &fakeBot{}
+	chainSender := &fakeChainSender{}
+	uc := NewWithChain(fetcher, tweet.Sender{Bot: bot}, chainSender)
+
+	err := uc.SendTweet(context.Background(), 1001, 42, "user", "123", "@req")
+	if err != nil {
+		t.Fatalf("SendTweet() error = %v", err)
+	}
+
+	// Should use chain sender, not regular sender
+	if chainSender.calls != 1 {
+		t.Fatalf("chainSender calls = %d, want 1", chainSender.calls)
+	}
+	if bot.videoCalls+bot.photoCalls+bot.mediaGroupCalls+bot.messageCalls != 0 {
+		t.Fatalf("regular sender should not be called when chain sender is used")
+	}
+
+	// Verify chain items
+	if len(chainSender.lastItems) != 2 {
+		t.Fatalf("chain items = %d, want 2", len(chainSender.lastItems))
+	}
+	if chainSender.lastItems[0].Tweet.ID != "quoted-1" {
+		t.Errorf("first item ID = %q, want %q", chainSender.lastItems[0].Tweet.ID, "quoted-1")
+	}
+	if chainSender.lastItems[0].Type != chain.ChainTypeQuote {
+		t.Errorf("first item type = %q, want %q", chainSender.lastItems[0].Type, chain.ChainTypeQuote)
+	}
+	if chainSender.lastItems[1].Tweet.ID != "123" {
+		t.Errorf("second item ID = %q, want %q", chainSender.lastItems[1].Tweet.ID, "123")
+	}
+	if chainSender.lastItems[1].Type != chain.ChainTypeRoot {
+		t.Errorf("second item type = %q, want %q", chainSender.lastItems[1].Type, chain.ChainTypeRoot)
+	}
+
+	// Verify other params
+	if chainSender.lastChatID != 1001 {
+		t.Errorf("chatID = %d, want 1001", chainSender.lastChatID)
+	}
+	if chainSender.lastReplyToMsgID != 42 {
+		t.Errorf("replyToMsgID = %d, want 42", chainSender.lastReplyToMsgID)
+	}
+	if chainSender.lastOpts == nil || chainSender.lastOpts.RequesterUsername != "@req" {
+		t.Errorf("requester username not passed correctly")
+	}
+}
+
+func TestUseCaseSendTweetWithQuote_NoChainSender_SendsRegular(t *testing.T) {
+	quotedTweet := &twitterxapi.Tweet{
+		ID:   "quoted-1",
+		Text: "Original tweet",
+		URL:  "https://x.com/original/status/quoted-1",
+	}
+	fetcher := &fakeFetcher{
+		tweet: &twitterxapi.Tweet{
+			ID:    "123",
+			Text:  "Quote tweet",
+			URL:   "https://x.com/user/status/123",
+			Quote: quotedTweet,
+		},
+	}
+	bot := &fakeBot{}
+	// Use New() without chain sender
+	uc := New(fetcher, tweet.Sender{Bot: bot})
+
+	err := uc.SendTweet(context.Background(), 1001, 42, "user", "123", "@req")
+	if err != nil {
+		t.Fatalf("SendTweet() error = %v", err)
+	}
+
+	// Should use regular sender
+	if bot.messageCalls != 1 {
+		t.Fatalf("message calls = %d, want 1", bot.messageCalls)
+	}
+
+	// Should NOT have chain button (quote without chain sender)
+	if bot.lastMessageOpts == nil || bot.lastMessageOpts.ReplyMarkup == nil {
+		t.Fatalf("reply markup missing")
+	}
+	markup, ok := bot.lastMessageOpts.ReplyMarkup.(*gotgbot.InlineKeyboardMarkup)
+	if !ok {
+		t.Fatalf("reply markup type = %T, want InlineKeyboardMarkup", bot.lastMessageOpts.ReplyMarkup)
+	}
+	if tweet.FindChainButton(markup) != "" {
+		t.Fatalf("chain button should NOT be present for quote tweets")
+	}
+}
+
+func TestUseCaseSendTweetWithReply_ShowsChainButton(t *testing.T) {
+	fetcher := &fakeFetcher{
+		tweet: &twitterxapi.Tweet{
+			ID:               "123",
+			Text:             "Reply tweet",
+			URL:              "https://x.com/user/status/123",
+			ReplyingTo:       strPtr("original_user"),
+			ReplyingToStatus: strPtr("original-id"),
+		},
+	}
+	bot := &fakeBot{}
+	uc := New(fetcher, tweet.Sender{Bot: bot})
+
+	err := uc.SendTweet(context.Background(), 1001, 42, "user", "123", "@req")
+	if err != nil {
+		t.Fatalf("SendTweet() error = %v", err)
+	}
+
+	if bot.messageCalls != 1 {
+		t.Fatalf("message calls = %d, want 1", bot.messageCalls)
+	}
+
+	// Should have chain button for replies
+	if bot.lastMessageOpts == nil || bot.lastMessageOpts.ReplyMarkup == nil {
+		t.Fatalf("reply markup missing")
+	}
+	markup, ok := bot.lastMessageOpts.ReplyMarkup.(*gotgbot.InlineKeyboardMarkup)
+	if !ok {
+		t.Fatalf("reply markup type = %T, want InlineKeyboardMarkup", bot.lastMessageOpts.ReplyMarkup)
+	}
+	if tweet.FindChainButton(markup) == "" {
+		t.Fatalf("chain button should be present for reply tweets")
+	}
+}
+
+func TestUseCaseSendTweetWithQuote_ChainSenderError(t *testing.T) {
+	quotedTweet := &twitterxapi.Tweet{
+		ID:   "quoted-1",
+		Text: "Original tweet",
+	}
+	fetcher := &fakeFetcher{
+		tweet: &twitterxapi.Tweet{
+			ID:    "123",
+			Text:  "Quote tweet",
+			Quote: quotedTweet,
+		},
+	}
+	bot := &fakeBot{}
+	chainSender := &fakeChainSender{err: errors.New("chain send failed")}
+	uc := NewWithChain(fetcher, tweet.Sender{Bot: bot}, chainSender)
+
+	err := uc.SendTweet(context.Background(), 1001, 42, "user", "123", "@req")
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if !errors.Is(err, ErrSendTweet) {
+		t.Fatalf("expected ErrSendTweet, got %v", err)
 	}
 }

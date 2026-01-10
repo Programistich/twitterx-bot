@@ -64,7 +64,8 @@ func (h *Handler) Handle(b *gotgbot.Bot, ctx *ext.Context) error {
 		log.Debug("send chat action failed", "err", err)
 	}
 
-	uc := sendtweet.New(h.fetcher, tweet.Sender{Bot: b, Telegraph: h.telegraph, Log: log})
+	sender := tweet.Sender{Bot: b, Telegraph: h.telegraph, Log: log}
+	uc := sendtweet.NewWithChain(h.fetcher, sender, sender)
 	if sendErr := uc.SendTweet(reqCtx, ctx.EffectiveChat.Id, ctx.EffectiveMessage.MessageId, username, tweetID, shared.UserDisplayName(ctx.EffectiveUser)); sendErr != nil {
 		log.Error("send tweet failed", "tweet_username", username, "tweet_id", tweetID, "err", sendErr)
 		return nil

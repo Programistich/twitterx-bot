@@ -288,6 +288,46 @@ func TestBuildChain_MissingReplyUsername(t *testing.T) {
 	}
 }
 
+func TestBuildChain_RootWithQuote(t *testing.T) {
+	fetcher := &mockFetcher{}
+
+	quotedTweet := &twitterxapi.Tweet{
+		ID:   "quoted-1",
+		Text: "Original tweet being quoted",
+	}
+	rootTweet := &twitterxapi.Tweet{
+		ID:    "root-1",
+		Text:  "This is a quote tweet",
+		Quote: quotedTweet,
+	}
+
+	chain, err := BuildChain(context.Background(), fetcher, rootTweet)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should have: quoted tweet, then root tweet
+	if len(chain) != 2 {
+		t.Fatalf("expected 2 items in chain, got %d", len(chain))
+	}
+
+	// First item: quoted tweet
+	if chain[0].Tweet.ID != "quoted-1" {
+		t.Errorf("expected first item ID 'quoted-1', got %q", chain[0].Tweet.ID)
+	}
+	if chain[0].Type != ChainTypeQuote {
+		t.Errorf("expected first item type 'quote', got %q", chain[0].Type)
+	}
+
+	// Second item: root tweet
+	if chain[1].Tweet.ID != "root-1" {
+		t.Errorf("expected second item ID 'root-1', got %q", chain[1].Tweet.ID)
+	}
+	if chain[1].Type != ChainTypeRoot {
+		t.Errorf("expected second item type 'root', got %q", chain[1].Type)
+	}
+}
+
 func TestGetQuotedTweets_NilTweet(t *testing.T) {
 	quotes := GetQuotedTweets(nil)
 	if quotes != nil {

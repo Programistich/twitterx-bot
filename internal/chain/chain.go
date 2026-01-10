@@ -47,6 +47,14 @@ func BuildChain(ctx context.Context, fetcher TweetFetcher, tweet *twitterxapi.Tw
 	}
 	chain = append(chain, replyChain...)
 
+	// Add quoted tweet if present (before the root)
+	if tweet.Quote != nil {
+		chain = append(chain, ChainItem{
+			Tweet: tweet.Quote,
+			Type:  ChainTypeQuote,
+		})
+	}
+
 	// Add the original tweet as root
 	chain = append(chain, ChainItem{
 		Tweet: tweet,

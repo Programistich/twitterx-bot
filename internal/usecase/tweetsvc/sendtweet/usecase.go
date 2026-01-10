@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"twitterx-bot/internal/chain"
 	"twitterx-bot/internal/telegram/tweet"
 	"twitterx-bot/internal/twitterxapi"
 )
@@ -24,15 +25,26 @@ type TweetSender interface {
 	SendTweet(ctx context.Context, chatID, replyToMsgID int64, tweet *twitterxapi.Tweet, opts *tweet.SendResponseOpts) error
 }
 
+// ChainSender sends chain of tweets to Telegram.
+type ChainSender interface {
+	SendChainResponse(chatID int64, items []chain.ChainItem, replyToMsgID int64, opts *tweet.SendChainResponseOpts) error
+}
+
 // UseCase handles sending tweets to Telegram.
 type UseCase struct {
-	Fetcher TweetFetcher
-	Sender  TweetSender
+	Fetcher     TweetFetcher
+	Sender      TweetSender
+	ChainSender ChainSender
 }
 
 // New creates a new sendtweet UseCase.
 func New(fetcher TweetFetcher, sender TweetSender) *UseCase {
 	return &UseCase{Fetcher: fetcher, Sender: sender}
+}
+
+// NewWithChain creates a new sendtweet UseCase with chain support.
+func NewWithChain(fetcher TweetFetcher, sender TweetSender, chainSender ChainSender) *UseCase {
+	return &UseCase{Fetcher: fetcher, Sender: sender, ChainSender: chainSender}
 }
 
 // SendTweet fetches a tweet and sends it to the chat, replying to replyToMsgID.
@@ -52,6 +64,22 @@ func (uc *UseCase) SendTweet(ctx context.Context, chatID, replyToMsgID int64, us
 		return fmt.Errorf("%w: %v", ErrFetchTweet, err)
 	}
 
+	// If tweet has a quote and we have a chain sender, send as chain immediately
+	if tw != nil && tw.Quote != nil && uc.ChainSender != nil {
+		items := []chain.ChainItem{
+			{Tweet: tw.Quote, Type: chain.ChainTypeQuote},
+			{Tweet: tw, Type: chain.ChainTypeRoot},
+		}
+		opts := &tweet.SendChainResponseOpts{
+			RequesterUsername: requester,
+		}
+		if err := uc.ChainSender.SendChainResponse(chatID, items, replyToMsgID, opts); err != nil {
+			return fmt.Errorf("%w: %v", ErrSendTweet, err)
+		}
+		return nil
+	}
+
+	// Show chain button only for replies (not quotes)
 	var keyboardOpts *tweet.KeyboardOpts
 	if tw != nil && tw.ReplyingToStatus != nil {
 		keyboardOpts = &tweet.KeyboardOpts{
