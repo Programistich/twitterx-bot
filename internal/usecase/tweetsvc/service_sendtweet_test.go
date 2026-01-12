@@ -84,6 +84,13 @@ func (b *fakeBot) SendMessage(_ int64, text string, opts *gotgbot.SendMessageOpt
 	return &gotgbot.Message{MessageId: 1}, nil
 }
 
+// fakeVideoChecker always returns true (video is within size limits).
+type fakeVideoChecker struct{}
+
+func (fakeVideoChecker) Check(_ context.Context, _ string) bool {
+	return true
+}
+
 func TestServiceSendTweetSelectsVideo(t *testing.T) {
 	fetcher := &fakeFetcher{
 		tweet: &twitterxapi.Tweet{
@@ -98,7 +105,7 @@ func TestServiceSendTweetSelectsVideo(t *testing.T) {
 		},
 	}
 	bot := &fakeBot{}
-	svc := New(fetcher, tweet.Sender{Bot: bot})
+	svc := New(fetcher, tweet.Sender{Bot: bot, VideoChecker: fakeVideoChecker{}})
 
 	err := svc.SendTweet(context.Background(), 1001, 42, "user", "123", "@req")
 	if err != nil {

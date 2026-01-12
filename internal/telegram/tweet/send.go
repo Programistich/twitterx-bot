@@ -27,12 +27,25 @@ type SendResponseOpts struct {
 	RequesterUsername string
 }
 
+// VideoChecker checks if video files are within size limits.
+type VideoChecker interface {
+	Check(ctx context.Context, url string) bool
+}
+
 // Sender sends tweets to Telegram.
 type Sender struct {
-	Bot       BotAPI
-	Formatter Formatter
-	Telegraph ArticleCreator // Optional: for creating articles when text is too long
-	Log       *logger.Logger
+	Bot          BotAPI
+	Formatter    Formatter
+	Telegraph    ArticleCreator // Optional: for creating articles when text is too long
+	VideoChecker VideoChecker   // Optional: for checking video size before sending
+	Log          *logger.Logger
+}
+
+func (s Sender) videoChecker() VideoChecker {
+	if s.VideoChecker != nil {
+		return s.VideoChecker
+	}
+	return DefaultVideoSizeChecker()
 }
 
 // SendResponse sends a single tweet reply to the chat message in ctx.
@@ -117,22 +130,39 @@ func (s Sender) sendTweetMessage(chatID int64, tweet *twitterxapi.Tweet, opts *s
 	// Check if we need Telegraph for long text
 	caption := s.prepareCaption(context.Background(), tweet, opts.RequesterUsername, f)
 
-	// Priority 1: Video
+	// Priority 1: Video (if within size limits)
 	if tweet.Media != nil && len(tweet.Media.Videos) > 0 {
 		video := tweet.Media.Videos[0]
 		if video.URL != "" {
-			log.Debug("sending video tweet", "width", video.Width, "height", video.Height)
-			videoOpts := &gotgbot.SendVideoOpts{
-				Caption:         caption,
-				ParseMode:       "HTML",
-				Width:           int64(video.Width),
-				Height:          int64(video.Height),
-				ReplyParameters: opts.ReplyParams,
+			// Check if video is within Telegram's file size limit
+			if s.videoChecker().Check(context.Background(), video.URL) {
+				log.Debug("sending video tweet", "width", video.Width, "height", video.Height)
+				videoOpts := &gotgbot.SendVideoOpts{
+					Caption:         caption,
+					ParseMode:       "HTML",
+					Width:           int64(video.Width),
+					Height:          int64(video.Height),
+					ReplyParameters: opts.ReplyParams,
+				}
+				if opts.ReplyMarkup != nil {
+					videoOpts.ReplyMarkup = opts.ReplyMarkup
+				}
+				return s.Bot.SendVideo(chatID, gotgbot.InputFileByURL(video.URL), videoOpts)
 			}
-			if opts.ReplyMarkup != nil {
-				videoOpts.ReplyMarkup = opts.ReplyMarkup
+			// Video too large - fallback to thumbnail as photo
+			if video.ThumbnailURL != "" {
+				log.Info("video too large, sending thumbnail instead", "width", video.Width, "height", video.Height)
+				photoOpts := &gotgbot.SendPhotoOpts{
+					Caption:         caption,
+					ParseMode:       "HTML",
+					ReplyParameters: opts.ReplyParams,
+				}
+				if opts.ReplyMarkup != nil {
+					photoOpts.ReplyMarkup = opts.ReplyMarkup
+				}
+				return s.Bot.SendPhoto(chatID, gotgbot.InputFileByURL(video.ThumbnailURL), photoOpts)
 			}
-			return s.Bot.SendVideo(chatID, gotgbot.InputFileByURL(video.URL), videoOpts)
+			log.Warn("video too large and no thumbnail available")
 		}
 	}
 

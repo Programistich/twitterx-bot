@@ -89,6 +89,13 @@ func strPtr(s string) *string {
 	return &s
 }
 
+// fakeVideoChecker always returns true (video is within size limits).
+type fakeVideoChecker struct{}
+
+func (fakeVideoChecker) Check(_ context.Context, _ string) bool {
+	return true
+}
+
 func TestUseCaseSendTweetSelectsVideo(t *testing.T) {
 	fetcher := &fakeFetcher{
 		tweet: &twitterxapi.Tweet{
@@ -103,7 +110,7 @@ func TestUseCaseSendTweetSelectsVideo(t *testing.T) {
 		},
 	}
 	bot := &fakeBot{}
-	uc := New(fetcher, tweet.Sender{Bot: bot})
+	uc := New(fetcher, tweet.Sender{Bot: bot, VideoChecker: fakeVideoChecker{}})
 
 	err := uc.SendTweet(context.Background(), 1001, 42, "user", "123", "@req")
 	if err != nil {

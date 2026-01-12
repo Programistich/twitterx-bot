@@ -1,12 +1,74 @@
 package tweet
 
 import (
+	"context"
+	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"twitterx-bot/internal/twitterxapi"
 )
 
 const MaxMediaGroupSize = 10
+
+// MaxVideoFileSize is the maximum file size Telegram bots can send via URL (50 MB).
+const MaxVideoFileSize = 50 * 1024 * 1024
+
+// VideoSizeChecker checks video file sizes via HTTP HEAD requests.
+type VideoSizeChecker struct {
+	Client *http.Client
+}
+
+// DefaultVideoSizeChecker returns a checker with default HTTP client.
+func DefaultVideoSizeChecker() *VideoSizeChecker {
+	return &VideoSizeChecker{
+		Client: &http.Client{Timeout: 5 * time.Second},
+	}
+}
+
+// Check checks if a video URL exceeds the Telegram file size limit.
+// Returns true if video is within limits, false if too large or on error.
+func (c *VideoSizeChecker) Check(ctx context.Context, url string) bool {
+	if url == "" {
+		return false
+	}
+
+	client := c.Client
+	if client == nil {
+		client = &http.Client{Timeout: 5 * time.Second}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, url, nil)
+	if err != nil {
+		return false
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	contentLength := resp.Header.Get("Content-Length")
+	if contentLength == "" {
+		// If we can't determine size, assume it's too large
+		return false
+	}
+
+	size, err := strconv.ParseInt(contentLength, 10, 64)
+	if err != nil {
+		return false
+	}
+
+	return size <= MaxVideoFileSize
+}
+
+// CheckVideoSize checks if a video URL exceeds the Telegram file size limit.
+// Returns true if video is within limits, false if too large or on error.
+func CheckVideoSize(ctx context.Context, url string) bool {
+	return DefaultVideoSizeChecker().Check(ctx, url)
+}
 
 func SelectPhoto(media *twitterxapi.Media) (url, thumb string, width, height int) {
 	if media == nil || len(media.Photos) == 0 {
