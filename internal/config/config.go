@@ -11,6 +11,7 @@ type Config struct {
 	Debug          bool
 	TwitterXAPIURL string
 	TelegramAPIURL string
+	DatabaseURL    string
 
 	TelegraphAuthorName string
 	TelegraphAuthorURL  string
@@ -25,6 +26,7 @@ func Load() (Config, error) {
 		Debug:          os.Getenv("DEBUG") == "true" || os.Getenv("DEBUG") == "True" || os.Getenv("DEBUG") == "1",
 		TwitterXAPIURL: os.Getenv("TWITTERX_API_URL"),
 		TelegramAPIURL: telegramAPIURL,
+		DatabaseURL:    os.Getenv("DATABASE_URL"),
 
 		TelegraphAuthorName: "TwitterX",
 		TelegraphAuthorURL:  "https://t.me/twitter_x_bot",
@@ -34,6 +36,9 @@ func Load() (Config, error) {
 	}
 	if cfg.BotToken == "" {
 		return Config{}, errors.New("BOT_TOKEN is required")
+	}
+	if cfg.DatabaseURL == "" {
+		return Config{}, errors.New("DATABASE_URL is required")
 	}
 	return cfg, nil
 }
