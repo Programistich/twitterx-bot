@@ -9,6 +9,7 @@ import (
 
 	"twitterx-bot/internal/database"
 	"twitterx-bot/internal/handlers/shared"
+	"twitterx-bot/internal/localization"
 	"twitterx-bot/internal/logger"
 	"twitterx-bot/internal/telegram/tweet"
 	"twitterx-bot/internal/usecase/tweetsvc/sendchain"
@@ -53,11 +54,21 @@ func (h *Handlers) Chain(b *gotgbot.Bot, ctx *ext.Context) error {
 		log = log.With("user_id", cb.From.Id, "username", cb.From.Username)
 	}
 
+	chatID := ctx.EffectiveChat.Id
+
+	// Get language for this chat
+	lang := database.DefaultLanguage
+	if h.chatSettings != nil {
+		if l, err := h.chatSettings.GetLanguage(context.Background(), chatID); err == nil {
+			lang = l
+		}
+	}
+
 	username, tweetID, replyToMsgID, ok := tweet.DecodeChainCallback(cb.Data)
 	if !ok {
 		log.Error("decode chain callback failed", "data", cb.Data)
 		_, err := cb.Answer(b, &gotgbot.AnswerCallbackQueryOpts{
-			Text: "Invalid callback data",
+			Text: localization.Get(lang, localization.KeyInvalidCallbackData),
 		})
 		return err
 	}
@@ -66,7 +77,7 @@ func (h *Handlers) Chain(b *gotgbot.Bot, ctx *ext.Context) error {
 	log.Info("chain callback received")
 
 	_, err := cb.Answer(b, &gotgbot.AnswerCallbackQueryOpts{
-		Text: "Fetching full chain...",
+		Text: localization.Get(lang, localization.KeyFetchingFullChain),
 	})
 	if err != nil {
 		log.Debug("answer callback failed", "err", err)
@@ -75,8 +86,7 @@ func (h *Handlers) Chain(b *gotgbot.Bot, ctx *ext.Context) error {
 	reqCtx, cancel := context.WithTimeout(context.Background(), h.chainTimeout)
 	defer cancel()
 
-	chatID := ctx.EffectiveChat.Id
-	uc := sendchain.New(h.fetcher, tweet.Sender{Bot: b, Telegraph: h.telegraph, Log: log})
+	uc := sendchain.New(h.fetcher, tweet.Sender{Bot: b, Telegraph: h.telegraph, Log: log, Lang: lang})
 	if sendErr := uc.SendChain(reqCtx, chatID, replyToMsgID, username, tweetID, shared.UserDisplayName(&cb.From)); sendErr != nil {
 		log.Error("send chain failed", "err", sendErr)
 		return nil
@@ -101,11 +111,21 @@ func (h *Handlers) Delete(b *gotgbot.Bot, ctx *ext.Context) error {
 		log = log.With("chat_id", ctx.EffectiveChat.Id)
 	}
 
+	chatID := ctx.EffectiveChat.Id
+
+	// Get language for this chat
+	lang := database.DefaultLanguage
+	if h.chatSettings != nil {
+		if l, err := h.chatSettings.GetLanguage(context.Background(), chatID); err == nil {
+			lang = l
+		}
+	}
+
 	deleteData, ok := tweet.DecodeDeleteCallback(cb.Data)
 	if !ok {
 		log.Error("decode delete callback failed", "data", cb.Data)
 		_, err := cb.Answer(b, &gotgbot.AnswerCallbackQueryOpts{
-			Text: "Invalid callback data",
+			Text: localization.Get(lang, localization.KeyInvalidCallbackData),
 		})
 		return err
 	}
@@ -113,12 +133,10 @@ func (h *Handlers) Delete(b *gotgbot.Bot, ctx *ext.Context) error {
 	log = log.With("msg_id", deleteData.MsgID, "has_chain", deleteData.HasChain)
 	log.Info("delete callback received")
 
-	chatID := ctx.EffectiveChat.Id
-
 	if _, err := b.DeleteMessage(chatID, deleteData.MsgID, nil); err != nil {
 		log.Debug("delete original message failed", "err", err)
 		_, answerErr := cb.Answer(b, &gotgbot.AnswerCallbackQueryOpts{
-			Text: "Cannot delete message",
+			Text: localization.Get(lang, localization.KeyCannotDeleteMessage),
 		})
 		return answerErr
 	}
@@ -134,7 +152,7 @@ func (h *Handlers) Delete(b *gotgbot.Bot, ctx *ext.Context) error {
 		if _, _, editErr := b.EditMessageReplyMarkup(&gotgbot.EditMessageReplyMarkupOpts{
 			ChatId:      chatID,
 			MessageId:   botMsgID,
-			ReplyMarkup: *tweet.BuildChainOnlyKeyboard(chainCallbackData),
+			ReplyMarkup: *tweet.BuildChainOnlyKeyboard(chainCallbackData, lang),
 		}); editErr != nil {
 			log.Debug("edit reply markup failed", "err", editErr)
 		}
@@ -149,7 +167,7 @@ func (h *Handlers) Delete(b *gotgbot.Bot, ctx *ext.Context) error {
 	}
 
 	_, err := cb.Answer(b, &gotgbot.AnswerCallbackQueryOpts{
-		Text: "Deleted",
+		Text: localization.Get(lang, localization.KeyDeleted),
 	})
 	if err == nil {
 		log.Info("message deleted")

@@ -112,7 +112,7 @@ func TestUseCaseSendTweetSelectsVideo(t *testing.T) {
 	bot := &fakeBot{}
 	uc := New(fetcher, tweet.Sender{Bot: bot, VideoChecker: fakeVideoChecker{}})
 
-	err := uc.SendTweet(context.Background(), 1001, 42, "user", "123", "@req")
+	err := uc.SendTweet(context.Background(), 1001, 42, "user", "123", "@req", "en")
 	if err != nil {
 		t.Fatalf("SendTweet() error = %v", err)
 	}
@@ -157,7 +157,7 @@ func TestUseCaseSendTweetSelectsPhoto(t *testing.T) {
 	bot := &fakeBot{}
 	uc := New(fetcher, tweet.Sender{Bot: bot})
 
-	err := uc.SendTweet(context.Background(), 10, 7, "user", "321", "")
+	err := uc.SendTweet(context.Background(), 10, 7, "user", "321", "", "en")
 	if err != nil {
 		t.Fatalf("SendTweet() error = %v", err)
 	}
@@ -198,7 +198,7 @@ func TestUseCaseSendTweetSelectsMediaGroup(t *testing.T) {
 	bot := &fakeBot{}
 	uc := New(fetcher, tweet.Sender{Bot: bot})
 
-	err := uc.SendTweet(context.Background(), 10, 7, "user", "555", "@req")
+	err := uc.SendTweet(context.Background(), 10, 7, "user", "555", "@req", "en")
 	if err != nil {
 		t.Fatalf("SendTweet() error = %v", err)
 	}
@@ -230,7 +230,7 @@ func TestUseCaseSendTweetSelectsText(t *testing.T) {
 	bot := &fakeBot{}
 	uc := New(fetcher, tweet.Sender{Bot: bot})
 
-	err := uc.SendTweet(context.Background(), 10, 7, "user", "777", "@req")
+	err := uc.SendTweet(context.Background(), 10, 7, "user", "777", "@req", "en")
 	if err != nil {
 		t.Fatalf("SendTweet() error = %v", err)
 	}
@@ -247,7 +247,7 @@ func TestUseCaseSendTweetFetcherError(t *testing.T) {
 	bot := &fakeBot{}
 	uc := New(fetcher, tweet.Sender{Bot: bot})
 
-	err := uc.SendTweet(context.Background(), 10, 7, "user", "321", "")
+	err := uc.SendTweet(context.Background(), 10, 7, "user", "321", "", "en")
 	if err == nil {
 		t.Fatalf("expected error")
 	}
@@ -264,7 +264,7 @@ func TestUseCaseSendTweetSenderError(t *testing.T) {
 	bot := &fakeBot{err: errors.New("send fail")}
 	uc := New(fetcher, tweet.Sender{Bot: bot})
 
-	err := uc.SendTweet(context.Background(), 10, 7, "user", "123", "")
+	err := uc.SendTweet(context.Background(), 10, 7, "user", "123", "", "en")
 	if err == nil {
 		t.Fatalf("expected error")
 	}
@@ -275,7 +275,7 @@ func TestUseCaseSendTweetSenderError(t *testing.T) {
 
 func TestUseCaseSendTweetMissingDeps(t *testing.T) {
 	uc := &UseCase{}
-	if err := uc.SendTweet(context.Background(), 1, 1, "u", "t", ""); err == nil {
+	if err := uc.SendTweet(context.Background(), 1, 1, "u", "t", "", "en"); err == nil {
 		t.Fatalf("expected error for missing deps")
 	}
 }
@@ -316,7 +316,7 @@ func TestUseCaseSendTweetWithQuote_SendsChain(t *testing.T) {
 	chainSender := &fakeChainSender{}
 	uc := NewWithChain(fetcher, tweet.Sender{Bot: bot}, chainSender)
 
-	err := uc.SendTweet(context.Background(), 1001, 42, "user", "123", "@req")
+	err := uc.SendTweet(context.Background(), 1001, 42, "user", "123", "@req", "en")
 	if err != nil {
 		t.Fatalf("SendTweet() error = %v", err)
 	}
@@ -376,7 +376,7 @@ func TestUseCaseSendTweetWithQuote_NoChainSender_SendsRegular(t *testing.T) {
 	// Use New() without chain sender
 	uc := New(fetcher, tweet.Sender{Bot: bot})
 
-	err := uc.SendTweet(context.Background(), 1001, 42, "user", "123", "@req")
+	err := uc.SendTweet(context.Background(), 1001, 42, "user", "123", "@req", "en")
 	if err != nil {
 		t.Fatalf("SendTweet() error = %v", err)
 	}
@@ -412,7 +412,7 @@ func TestUseCaseSendTweetWithReply_ShowsChainButton(t *testing.T) {
 	bot := &fakeBot{}
 	uc := New(fetcher, tweet.Sender{Bot: bot})
 
-	err := uc.SendTweet(context.Background(), 1001, 42, "user", "123", "@req")
+	err := uc.SendTweet(context.Background(), 1001, 42, "user", "123", "@req", "en")
 	if err != nil {
 		t.Fatalf("SendTweet() error = %v", err)
 	}
@@ -450,7 +450,7 @@ func TestUseCaseSendTweetWithQuote_ChainSenderError(t *testing.T) {
 	chainSender := &fakeChainSender{err: errors.New("chain send failed")}
 	uc := NewWithChain(fetcher, tweet.Sender{Bot: bot}, chainSender)
 
-	err := uc.SendTweet(context.Background(), 1001, 42, "user", "123", "@req")
+	err := uc.SendTweet(context.Background(), 1001, 42, "user", "123", "@req", "en")
 	if err == nil {
 		t.Fatalf("expected error")
 	}

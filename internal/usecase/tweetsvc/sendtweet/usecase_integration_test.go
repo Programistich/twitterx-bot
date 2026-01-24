@@ -47,7 +47,7 @@ func TestUseCaseSendTweet_UsesTelegramHTTPMock(t *testing.T) {
 		replyToMsgID int64 = 101
 	)
 
-	if err := uc.SendTweet(context.Background(), chatID, replyToMsgID, "user", "777", "@req"); err != nil {
+	if err := uc.SendTweet(context.Background(), chatID, replyToMsgID, "user", "777", "@req", "en"); err != nil {
 		t.Fatalf("SendTweet() error = %v", err)
 	}
 

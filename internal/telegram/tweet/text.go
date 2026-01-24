@@ -5,6 +5,7 @@ import (
 	"html"
 	"strings"
 
+	"twitterx-bot/internal/localization"
 	"twitterx-bot/internal/twitterxapi"
 )
 
@@ -20,6 +21,7 @@ type Formatter struct {
 	MaxCaptionLength     int
 	MaxMessageLength     int
 	MaxDescriptionLength int
+	Lang                 string
 }
 
 // DefaultFormatter returns formatter defaults aligned with Telegram limits.
@@ -46,19 +48,19 @@ func (f Formatter) withDefaults() Formatter {
 
 func (f Formatter) Title(tweet *twitterxapi.Tweet) string {
 	if tweet == nil {
-		return "Tweet"
+		return localization.Get(f.Lang, localization.KeyTweet)
 	}
 	if tweet.Author.ScreenName != "" {
 		screenName := tweet.Author.ScreenName
 		if !strings.HasPrefix(screenName, "@") {
 			screenName = "@" + screenName
 		}
-		return fmt.Sprintf("Tweet by %s", screenName)
+		return fmt.Sprintf(localization.Get(f.Lang, localization.KeyTweetBy), screenName)
 	}
 	if tweet.Author.Name != "" {
-		return fmt.Sprintf("Tweet by %s", tweet.Author.Name)
+		return fmt.Sprintf(localization.Get(f.Lang, localization.KeyTweetBy), tweet.Author.Name)
 	}
-	return "Tweet"
+	return localization.Get(f.Lang, localization.KeyTweet)
 }
 
 func (f Formatter) Caption(tweet *twitterxapi.Tweet) string {
@@ -130,24 +132,27 @@ func (f Formatter) HTMLContentWithRequester(tweet *twitterxapi.Tweet, requesterU
 		displayName = "@" + strings.TrimPrefix(screenName, "@")
 	}
 
+	tweetText := localization.Get(f.Lang, localization.KeyTweet)
 	if tweetURL != "" {
-		sb.WriteString(fmt.Sprintf(`<a href="%s">Tweet</a>`, html.EscapeString(tweetURL)))
+		sb.WriteString(fmt.Sprintf(`<a href="%s">%s</a>`, html.EscapeString(tweetURL), tweetText))
 	} else {
-		sb.WriteString("Tweet")
+		sb.WriteString(tweetText)
 	}
 
 	if displayName != "" {
 		profileURL := authorProfileURL(screenName)
+		fromFormat := localization.Get(f.Lang, localization.KeyFrom)
 		if profileURL != "" {
-			sb.WriteString(fmt.Sprintf(` from <a href="%s">%s</a>`, html.EscapeString(profileURL), html.EscapeString(displayName)))
+			sb.WriteString(fmt.Sprintf(fromFormat, fmt.Sprintf(`<a href="%s">%s</a>`, html.EscapeString(profileURL), html.EscapeString(displayName))))
 		} else {
-			sb.WriteString(fmt.Sprintf(" from %s", html.EscapeString(displayName)))
+			sb.WriteString(fmt.Sprintf(fromFormat, html.EscapeString(displayName)))
 		}
 	}
 
 	// Add requester info
 	if requesterUsername != "" {
-		sb.WriteString(fmt.Sprintf(" by %s", html.EscapeString(requesterUsername)))
+		byFormat := localization.Get(f.Lang, localization.KeyBy)
+		sb.WriteString(fmt.Sprintf(byFormat, html.EscapeString(requesterUsername)))
 	}
 
 	// Add tweet text

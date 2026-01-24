@@ -324,7 +324,7 @@ func TestBuildKeyboard(t *testing.T) {
 			ShowChainButton: true,
 			ChainUsername:   "alice",
 			ChainTweetID:    "123456789",
-		})
+		}, "en")
 
 		if keyboard == nil {
 			t.Fatal("BuildKeyboard returned nil")
@@ -358,7 +358,7 @@ func TestBuildKeyboard(t *testing.T) {
 	})
 
 	t.Run("without chain button", func(t *testing.T) {
-		keyboard := BuildKeyboard(100, nil)
+		keyboard := BuildKeyboard(100, nil, "en")
 
 		if keyboard == nil {
 			t.Fatal("BuildKeyboard returned nil")

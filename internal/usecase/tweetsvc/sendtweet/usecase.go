@@ -48,7 +48,7 @@ func NewWithChain(fetcher TweetFetcher, sender TweetSender, chainSender ChainSen
 }
 
 // SendTweet fetches a tweet and sends it to the chat, replying to replyToMsgID.
-func (uc *UseCase) SendTweet(ctx context.Context, chatID, replyToMsgID int64, username, tweetID, requester string) error {
+func (uc *UseCase) SendTweet(ctx context.Context, chatID, replyToMsgID int64, username, tweetID, requester, lang string) error {
 	if uc == nil {
 		return fmt.Errorf("sendtweet usecase: %w", ErrSendTweet)
 	}
@@ -90,7 +90,7 @@ func (uc *UseCase) SendTweet(ctx context.Context, chatID, replyToMsgID int64, us
 	}
 
 	opts := &tweet.SendResponseOpts{
-		ReplyMarkup:       tweet.BuildKeyboard(replyToMsgID, keyboardOpts),
+		ReplyMarkup:       tweet.BuildKeyboard(replyToMsgID, keyboardOpts, lang),
 		RequesterUsername: requester,
 	}
 

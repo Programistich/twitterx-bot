@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/PaulSonOfLars/gotgbot/v2"
+
+	"twitterx-bot/internal/localization"
 )
 
 const (
@@ -98,18 +100,18 @@ type KeyboardOpts struct {
 
 // BuildKeyboard creates an inline keyboard with optional buttons.
 // Always includes "Delete original" button, optionally includes "Send full chain".
-func BuildKeyboard(replyToMsgID int64, opts *KeyboardOpts) *gotgbot.InlineKeyboardMarkup {
+func BuildKeyboard(replyToMsgID int64, opts *KeyboardOpts, lang string) *gotgbot.InlineKeyboardMarkup {
 	var buttons []gotgbot.InlineKeyboardButton
 
 	if opts != nil && opts.ShowChainButton {
 		buttons = append(buttons, gotgbot.InlineKeyboardButton{
-			Text:         "Send full chain",
+			Text:         localization.Get(lang, localization.KeySendFullChain),
 			CallbackData: EncodeChainCallback(opts.ChainUsername, opts.ChainTweetID, replyToMsgID),
 		})
 	}
 
 	buttons = append(buttons, gotgbot.InlineKeyboardButton{
-		Text:         "Delete original",
+		Text:         localization.Get(lang, localization.KeyDeleteOriginal),
 		CallbackData: EncodeDeleteCallback(replyToMsgID, opts),
 	})
 
@@ -135,12 +137,12 @@ func FindChainButton(markup *gotgbot.InlineKeyboardMarkup) string {
 }
 
 // BuildChainOnlyKeyboard creates a keyboard with only the "Send full chain" button.
-func BuildChainOnlyKeyboard(chainCallbackData string) *gotgbot.InlineKeyboardMarkup {
+func BuildChainOnlyKeyboard(chainCallbackData string, lang string) *gotgbot.InlineKeyboardMarkup {
 	return &gotgbot.InlineKeyboardMarkup{
 		InlineKeyboard: [][]gotgbot.InlineKeyboardButton{
 			{
 				{
-					Text:         "Send full chain",
+					Text:         localization.Get(lang, localization.KeySendFullChain),
 					CallbackData: chainCallbackData,
 				},
 			},
