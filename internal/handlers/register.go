@@ -12,6 +12,7 @@ import (
 	"twitterx-bot/internal/database"
 	"twitterx-bot/internal/handlers/callback"
 	"twitterx-bot/internal/handlers/inline"
+	"twitterx-bot/internal/handlers/lang"
 	"twitterx-bot/internal/handlers/message"
 	"twitterx-bot/internal/handlers/start"
 	"twitterx-bot/internal/logger"
@@ -49,8 +50,19 @@ func Register(d *ext.Dispatcher, log *logger.Logger, api *twitterxapi.Client, te
 // This is useful for testing with mock implementations.
 func RegisterWithFetcher(d *ext.Dispatcher, log *logger.Logger, fetcher TweetFetcher, telegraph tweet.ArticleCreator, chatSettings ChatSettingsProvider) {
 	// Start and help commands
-	d.AddHandler(handlers.NewCommand("start", start.Handler))
-	d.AddHandler(handlers.NewCommand("help", start.Handler))
+	startHandler := start.New(log, chatSettings)
+	d.AddHandler(handlers.NewCommand("start", startHandler.Handle))
+	d.AddHandler(handlers.NewCommand("help", startHandler.Handle))
+
+	// Lang command
+	langHandler := lang.New(log)
+	d.AddHandler(handlers.NewCommand("lang", langHandler.Handle))
+
+	// Lang callback handler
+	langCallbackHandler := lang.NewCallbackHandler(chatSettings, log)
+	d.AddHandler(handlers.NewCallback(func(cq *gotgbot.CallbackQuery) bool {
+		return strings.HasPrefix(cq.Data, lang.CallbackPrefix)
+	}, langCallbackHandler.Handle))
 
 	// Inline query handler
 	inlineUC := inlineuc.New(fetcher)

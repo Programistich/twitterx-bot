@@ -72,9 +72,17 @@ func (h *Handler) Handle(b *gotgbot.Bot, ctx *ext.Context) error {
 		log.Debug("send chat action failed", "err", err)
 	}
 
-	sender := tweet.Sender{Bot: b, Telegraph: h.telegraph, Log: log}
+	// Get language for this chat
+	lang := database.DefaultLanguage
+	if h.chatSettings != nil {
+		if l, langErr := h.chatSettings.GetLanguage(reqCtx, ctx.EffectiveChat.Id); langErr == nil {
+			lang = l
+		}
+	}
+
+	sender := tweet.Sender{Bot: b, Telegraph: h.telegraph, Log: log, Lang: lang}
 	uc := sendtweet.NewWithChain(h.fetcher, sender, sender)
-	if sendErr := uc.SendTweet(reqCtx, ctx.EffectiveChat.Id, ctx.EffectiveMessage.MessageId, username, tweetID, shared.UserDisplayName(ctx.EffectiveUser)); sendErr != nil {
+	if sendErr := uc.SendTweet(reqCtx, ctx.EffectiveChat.Id, ctx.EffectiveMessage.MessageId, username, tweetID, shared.UserDisplayName(ctx.EffectiveUser), lang); sendErr != nil {
 		log.Error("send tweet failed", "tweet_username", username, "tweet_id", tweetID, "err", sendErr)
 		return nil
 	}

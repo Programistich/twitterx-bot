@@ -8,7 +8,7 @@ import (
 )
 
 // SendTweet fetches a tweet and sends it to the chat, replying to replyToMsgID.
-func (s *Service) SendTweet(ctx context.Context, chatID, replyToMsgID int64, username, tweetID, requester string) error {
+func (s *Service) SendTweet(ctx context.Context, chatID, replyToMsgID int64, username, tweetID, requester, lang string) error {
 	if s == nil {
 		return fmt.Errorf("tweet service: %w", ErrSendTweet)
 	}
@@ -34,7 +34,7 @@ func (s *Service) SendTweet(ctx context.Context, chatID, replyToMsgID int64, use
 	}
 
 	opts := &tweet.SendResponseOpts{
-		ReplyMarkup:       tweet.BuildKeyboard(replyToMsgID, keyboardOpts),
+		ReplyMarkup:       tweet.BuildKeyboard(replyToMsgID, keyboardOpts, lang),
 		RequesterUsername: requester,
 	}
 

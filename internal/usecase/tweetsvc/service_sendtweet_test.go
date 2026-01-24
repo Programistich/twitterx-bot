@@ -107,7 +107,7 @@ func TestServiceSendTweetSelectsVideo(t *testing.T) {
 	bot := &fakeBot{}
 	svc := New(fetcher, tweet.Sender{Bot: bot, VideoChecker: fakeVideoChecker{}})
 
-	err := svc.SendTweet(context.Background(), 1001, 42, "user", "123", "@req")
+	err := svc.SendTweet(context.Background(), 1001, 42, "user", "123", "@req", "en")
 	if err != nil {
 		t.Fatalf("SendTweet() error = %v", err)
 	}
@@ -152,7 +152,7 @@ func TestServiceSendTweetSelectsPhoto(t *testing.T) {
 	bot := &fakeBot{}
 	svc := New(fetcher, tweet.Sender{Bot: bot})
 
-	err := svc.SendTweet(context.Background(), 10, 7, "user", "321", "")
+	err := svc.SendTweet(context.Background(), 10, 7, "user", "321", "", "en")
 	if err != nil {
 		t.Fatalf("SendTweet() error = %v", err)
 	}
@@ -193,7 +193,7 @@ func TestServiceSendTweetSelectsMediaGroup(t *testing.T) {
 	bot := &fakeBot{}
 	svc := New(fetcher, tweet.Sender{Bot: bot})
 
-	err := svc.SendTweet(context.Background(), 10, 7, "user", "555", "@req")
+	err := svc.SendTweet(context.Background(), 10, 7, "user", "555", "@req", "en")
 	if err != nil {
 		t.Fatalf("SendTweet() error = %v", err)
 	}
@@ -225,7 +225,7 @@ func TestServiceSendTweetSelectsText(t *testing.T) {
 	bot := &fakeBot{}
 	svc := New(fetcher, tweet.Sender{Bot: bot})
 
-	err := svc.SendTweet(context.Background(), 10, 7, "user", "777", "@req")
+	err := svc.SendTweet(context.Background(), 10, 7, "user", "777", "@req", "en")
 	if err != nil {
 		t.Fatalf("SendTweet() error = %v", err)
 	}
@@ -242,7 +242,7 @@ func TestServiceSendTweetFetcherError(t *testing.T) {
 	bot := &fakeBot{}
 	svc := New(fetcher, tweet.Sender{Bot: bot})
 
-	err := svc.SendTweet(context.Background(), 10, 7, "user", "321", "")
+	err := svc.SendTweet(context.Background(), 10, 7, "user", "321", "", "en")
 	if err == nil {
 		t.Fatalf("expected error")
 	}
@@ -259,7 +259,7 @@ func TestServiceSendTweetSenderError(t *testing.T) {
 	bot := &fakeBot{err: errors.New("send fail")}
 	svc := New(fetcher, tweet.Sender{Bot: bot})
 
-	err := svc.SendTweet(context.Background(), 10, 7, "user", "123", "")
+	err := svc.SendTweet(context.Background(), 10, 7, "user", "123", "", "en")
 	if err == nil {
 		t.Fatalf("expected error")
 	}
@@ -270,7 +270,7 @@ func TestServiceSendTweetSenderError(t *testing.T) {
 
 func TestServiceSendTweetMissingDeps(t *testing.T) {
 	svc := &Service{}
-	if err := svc.SendTweet(context.Background(), 1, 1, "u", "t", ""); err == nil {
+	if err := svc.SendTweet(context.Background(), 1, 1, "u", "t", "", "en"); err == nil {
 		t.Fatalf("expected error for missing deps")
 	}
 }

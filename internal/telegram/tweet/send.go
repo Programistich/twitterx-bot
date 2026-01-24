@@ -9,6 +9,7 @@ import (
 	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 
 	"twitterx-bot/internal/chain"
+	"twitterx-bot/internal/localization"
 	"twitterx-bot/internal/logger"
 	"twitterx-bot/internal/twitterxapi"
 )
@@ -39,6 +40,7 @@ type Sender struct {
 	Telegraph    ArticleCreator // Optional: for creating articles when text is too long
 	VideoChecker VideoChecker   // Optional: for checking video size before sending
 	Log          *logger.Logger
+	Lang         string // Language for localization
 }
 
 func (s Sender) videoChecker() VideoChecker {
@@ -122,6 +124,7 @@ func (s Sender) sendTweetMessage(chatID int64, tweet *twitterxapi.Tweet, opts *s
 	}
 
 	f := s.Formatter.withDefaults()
+	f.Lang = s.Lang
 	log := s.log().With("component", "tweet_sender", "chat_id", chatID)
 	if tweet != nil {
 		log = log.With("tweet_id", tweet.ID)
@@ -289,7 +292,8 @@ func (s Sender) fallbackCaption(tweet *twitterxapi.Tweet, requesterUsername stri
 	// Truncate and add link to original
 	if tweet.URL != "" {
 		truncated := TruncateHTML(caption, MaxCaptionLength-50)
-		return fmt.Sprintf("%s\n\n📎 %s", truncated, tweet.URL)
+		linkFormat := localization.Get(s.Lang, localization.KeyLinkFallback)
+		return fmt.Sprintf("%s\n\n"+linkFormat, truncated, tweet.URL)
 	}
 
 	return TruncateHTML(caption, MaxCaptionLength)
@@ -337,7 +341,7 @@ func (s Sender) SendChainResponse(chatID int64, items []chain.ChainItem, replyTo
 		// Add "Delete original" button and requester username only to the last message
 		if i == len(items)-1 {
 			if replyToMsgID != 0 {
-				msgOpts.ReplyMarkup = BuildKeyboard(replyToMsgID, nil)
+				msgOpts.ReplyMarkup = BuildKeyboard(replyToMsgID, nil, s.Lang)
 			}
 			msgOpts.RequesterUsername = opts.RequesterUsername
 		}
