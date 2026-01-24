@@ -1,6 +1,8 @@
 package lang
 
 import (
+	"context"
+
 	"github.com/PaulSonOfLars/gotgbot/v2"
 	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 
@@ -14,12 +16,13 @@ const CallbackPrefix = "lang:"
 
 // Handler holds dependencies for the /lang command.
 type Handler struct {
-	log *logger.Logger
+	chatSettings ChatSettingsProvider
+	log          *logger.Logger
 }
 
 // New creates a new lang handler.
-func New(log *logger.Logger) *Handler {
-	return &Handler{log: log}
+func New(chatSettings ChatSettingsProvider, log *logger.Logger) *Handler {
+	return &Handler{chatSettings: chatSettings, log: log}
 }
 
 // Handle sends the language selection inline keyboard.
@@ -33,6 +36,14 @@ func (h *Handler) Handle(b *gotgbot.Bot, ctx *ext.Context) error {
 	}
 	log.Info("lang command received")
 
+	// Get user's current language
+	lang := database.DefaultLanguage
+	if h.chatSettings != nil && ctx.EffectiveChat != nil {
+		if l, err := h.chatSettings.GetLanguage(context.Background(), ctx.EffectiveChat.Id); err == nil {
+			lang = l
+		}
+	}
+
 	// Build inline keyboard with 3 language buttons
 	keyboard := &gotgbot.InlineKeyboardMarkup{
 		InlineKeyboard: [][]gotgbot.InlineKeyboardButton{
@@ -44,8 +55,8 @@ func (h *Handler) Handle(b *gotgbot.Bot, ctx *ext.Context) error {
 		},
 	}
 
-	// Use English as default for the initial prompt
-	_, err := ctx.EffectiveMessage.Reply(b, localization.Get(database.LangEnglish, localization.KeySelectLanguage), &gotgbot.SendMessageOpts{
+	// Use user's current language for the prompt
+	_, err := ctx.EffectiveMessage.Reply(b, localization.Get(lang, localization.KeySelectLanguage), &gotgbot.SendMessageOpts{
 		ReplyMarkup: keyboard,
 	})
 	if err != nil {
