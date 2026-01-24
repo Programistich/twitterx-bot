@@ -17,6 +17,10 @@ const (
 	KeyCannotDeleteMessage StringKey = "cannot_delete_message"
 	KeyDeleted             StringKey = "deleted"
 
+	// Error messages
+	KeyInvalidLanguage    StringKey = "invalid_language"
+	KeyErrorSavingLanguage StringKey = "error_saving_language"
+
 	// Button texts
 	KeySendFullChain  StringKey = "send_full_chain"
 	KeyDeleteOriginal StringKey = "delete_original"

@@ -44,8 +44,15 @@ func (h *CallbackHandler) Handle(b *gotgbot.Bot, ctx *ext.Context) error {
 	langCode := strings.TrimPrefix(cb.Data, CallbackPrefix)
 	if !database.IsValidLanguage(langCode) {
 		log.Error("invalid language code", "code", langCode)
+		// Get user's current language for error message
+		currentLang := database.DefaultLanguage
+		if ctx.EffectiveChat != nil {
+			if l, err := h.chatSettings.GetLanguage(context.Background(), ctx.EffectiveChat.Id); err == nil {
+				currentLang = l
+			}
+		}
 		_, err := cb.Answer(b, &gotgbot.AnswerCallbackQueryOpts{
-			Text: "Invalid language",
+			Text: localization.Get(currentLang, localization.KeyInvalidLanguage),
 		})
 		return err
 	}
@@ -58,7 +65,12 @@ func (h *CallbackHandler) Handle(b *gotgbot.Bot, ctx *ext.Context) error {
 	_, err := h.chatSettings.UpdateLanguage(context.Background(), chatID, langCode)
 	if err != nil {
 		log.Error("update language failed", "err", err)
-		_, _ = cb.Answer(b, &gotgbot.AnswerCallbackQueryOpts{Text: "Error saving language"})
+		// Get user's current language for error message
+		currentLang := database.DefaultLanguage
+		if l, errLang := h.chatSettings.GetLanguage(context.Background(), chatID); errLang == nil {
+			currentLang = l
+		}
+		_, _ = cb.Answer(b, &gotgbot.AnswerCallbackQueryOpts{Text: localization.Get(currentLang, localization.KeyErrorSavingLanguage)})
 		return err
 	}
 

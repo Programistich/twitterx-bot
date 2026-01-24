@@ -55,7 +55,7 @@ func RegisterWithFetcher(d *ext.Dispatcher, log *logger.Logger, fetcher TweetFet
 	d.AddHandler(handlers.NewCommand("help", startHandler.Handle))
 
 	// Lang command
-	langHandler := lang.New(log)
+	langHandler := lang.New(chatSettings, log)
 	d.AddHandler(handlers.NewCommand("lang", langHandler.Handle))
 
 	// Lang callback handler
