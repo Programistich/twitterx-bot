@@ -7,6 +7,7 @@ import (
 	"github.com/PaulSonOfLars/gotgbot/v2"
 	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 
+	"twitterx-bot/internal/database"
 	"twitterx-bot/internal/handlers/shared"
 	"twitterx-bot/internal/logger"
 	"twitterx-bot/internal/telegram/tweet"
@@ -18,17 +19,24 @@ type TweetFetcher interface {
 	sendchain.TweetFetcher
 }
 
+// ChatSettingsProvider provides chat settings operations.
+type ChatSettingsProvider interface {
+	GetLanguage(ctx context.Context, chatID int64) (string, error)
+	UpdateLanguage(ctx context.Context, chatID int64, language string) (*database.ChatSettings, error)
+}
+
 // Handlers groups the callback-related dependencies.
 type Handlers struct {
 	log          *logger.Logger
 	fetcher      TweetFetcher
 	chainTimeout time.Duration
 	telegraph    tweet.ArticleCreator
+	chatSettings ChatSettingsProvider
 }
 
 // New creates callback handlers with the configured logger, tweet fetcher, and chain timeout.
-func New(log *logger.Logger, fetcher TweetFetcher, chainTimeout time.Duration, telegraph tweet.ArticleCreator) *Handlers {
-	return &Handlers{log: log, fetcher: fetcher, chainTimeout: chainTimeout, telegraph: telegraph}
+func New(log *logger.Logger, fetcher TweetFetcher, chainTimeout time.Duration, telegraph tweet.ArticleCreator, chatSettings ChatSettingsProvider) *Handlers {
+	return &Handlers{log: log, fetcher: fetcher, chainTimeout: chainTimeout, telegraph: telegraph, chatSettings: chatSettings}
 }
 
 // Chain processes callback queries that request a tweet chain.

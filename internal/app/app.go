@@ -13,21 +13,38 @@ import (
 	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 
 	"twitterx-bot/internal/config"
+	"twitterx-bot/internal/database"
 	"twitterx-bot/internal/handlers"
 	"twitterx-bot/internal/logger"
 	"twitterx-bot/internal/telegraph"
 	"twitterx-bot/internal/twitterxapi"
 )
 
-func NewBot() (*gotgbot.Bot, *ext.Updater, *logger.Logger, error) {
+func NewBot() (*gotgbot.Bot, *ext.Updater, *logger.Logger, *database.DB, error) {
 	cfg, err := config.Load()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	l := logger.New(cfg.Debug)
 	log := l.With("component", "app")
 	log.Info("config loaded", "debug", cfg.Debug, "twitterx_api_url", cfg.TwitterXAPIURL, "telegram_api_url", cfg.TelegramAPIURL)
+
+	// Initialize database
+	db, err := database.New(cfg.DatabaseURL)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("init database: %w", err)
+	}
+	log.Info("database connected")
+
+	// Run migrations
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := db.Migrate(ctx); err != nil {
+		db.Close()
+		return nil, nil, nil, nil, fmt.Errorf("run migrations: %w", err)
+	}
+	log.Info("database migrations completed")
 
 	// Initialize Telegraph service if enabled
 	var telegraphService *telegraph.Service
@@ -51,7 +68,8 @@ func NewBot() (*gotgbot.Bot, *ext.Updater, *logger.Logger, error) {
 
 	bot, err := gotgbot.NewBot(cfg.BotToken, botOpts)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("init bot: %w", err)
+		db.Close()
+		return nil, nil, nil, nil, fmt.Errorf("init bot: %w", err)
 	}
 
 	dispatcher := ext.NewDispatcher(&ext.DispatcherOpts{
@@ -71,13 +89,14 @@ func NewBot() (*gotgbot.Bot, *ext.Updater, *logger.Logger, error) {
 	})
 	updater := ext.NewUpdater(dispatcher, &ext.UpdaterOpts{})
 
+	chatSettingsRepo := database.NewChatSettingsRepository(db)
 	apiClient := twitterxapi.NewClient(cfg.TwitterXAPIURL)
-	handlers.Register(dispatcher, l, apiClient, telegraphService)
+	handlers.Register(dispatcher, l, apiClient, telegraphService, chatSettingsRepo)
 
-	return bot, updater, l, nil
+	return bot, updater, l, db, nil
 }
 
-func Start(bot *gotgbot.Bot, updater *ext.Updater, l *logger.Logger) error {
+func Start(bot *gotgbot.Bot, updater *ext.Updater, l *logger.Logger, db *database.DB) error {
 	if bot == nil {
 		return fmt.Errorf("start bot: bot is nil")
 	}
@@ -107,14 +126,20 @@ func Start(bot *gotgbot.Bot, updater *ext.Updater, l *logger.Logger) error {
 	log.Info("shutdown signal received")
 	updater.Stop()
 	log.Info("updater stopped")
+	if db != nil {
+		if err := db.Close(); err != nil {
+			log.Error("close database failed", "err", err)
+		}
+		log.Info("database connection closed")
+	}
 	return nil
 }
 
 func Run() error {
-	bot, updater, l, err := NewBot()
+	bot, updater, l, db, err := NewBot()
 	if err != nil {
 		return err
 	}
 
-	return Start(bot, updater, l)
+	return Start(bot, updater, l, db)
 }

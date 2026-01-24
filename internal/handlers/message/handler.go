@@ -8,6 +8,7 @@ import (
 	"github.com/PaulSonOfLars/gotgbot/v2"
 	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 
+	"twitterx-bot/internal/database"
 	"twitterx-bot/internal/handlers/shared"
 	"twitterx-bot/internal/logger"
 	"twitterx-bot/internal/telegram/tweet"
@@ -20,17 +21,24 @@ type TweetFetcher interface {
 	sendtweet.TweetFetcher
 }
 
+// ChatSettingsProvider provides chat settings operations.
+type ChatSettingsProvider interface {
+	GetLanguage(ctx context.Context, chatID int64) (string, error)
+	UpdateLanguage(ctx context.Context, chatID int64, language string) (*database.ChatSettings, error)
+}
+
 // Handler encapsulates the dependencies required for processing message-based tweets.
 type Handler struct {
-	log       *logger.Logger
-	fetcher   TweetFetcher
-	timeout   time.Duration
-	telegraph tweet.ArticleCreator
+	log          *logger.Logger
+	fetcher      TweetFetcher
+	timeout      time.Duration
+	telegraph    tweet.ArticleCreator
+	chatSettings ChatSettingsProvider
 }
 
 // New creates a new message handler with the supplied logger, tweet fetcher, and timeout.
-func New(log *logger.Logger, fetcher TweetFetcher, timeout time.Duration, telegraph tweet.ArticleCreator) *Handler {
-	return &Handler{log: log, fetcher: fetcher, timeout: timeout, telegraph: telegraph}
+func New(log *logger.Logger, fetcher TweetFetcher, timeout time.Duration, telegraph tweet.ArticleCreator, chatSettings ChatSettingsProvider) *Handler {
+	return &Handler{log: log, fetcher: fetcher, timeout: timeout, telegraph: telegraph, chatSettings: chatSettings}
 }
 
 // Handle processes incoming Telegram messages that contain Twitter URLs.

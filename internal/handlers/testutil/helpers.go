@@ -10,6 +10,7 @@ import (
 	"github.com/PaulSonOfLars/gotgbot/v2"
 	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 
+	"twitterx-bot/internal/database"
 	"twitterx-bot/internal/handlers"
 	"twitterx-bot/internal/logger"
 	"twitterx-bot/internal/telegram/tweet"
@@ -29,6 +30,31 @@ func (f *FakeTweetAPI) GetTweet(_ context.Context, username, tweetID string) (*t
 		return tw, nil
 	}
 	return nil, nil
+}
+
+// FakeChatSettings is a minimal fake for testing chat settings.
+type FakeChatSettings struct {
+	Languages map[int64]string
+}
+
+// GetLanguage returns the language for a chat or default if not set.
+func (f *FakeChatSettings) GetLanguage(_ context.Context, chatID int64) (string, error) {
+	if f.Languages == nil {
+		return database.DefaultLanguage, nil
+	}
+	if lang, ok := f.Languages[chatID]; ok {
+		return lang, nil
+	}
+	return database.DefaultLanguage, nil
+}
+
+// UpdateLanguage updates the language for a chat.
+func (f *FakeChatSettings) UpdateLanguage(_ context.Context, chatID int64, language string) (*database.ChatSettings, error) {
+	if f.Languages == nil {
+		f.Languages = make(map[int64]string)
+	}
+	f.Languages[chatID] = language
+	return &database.ChatSettings{ChatID: chatID, Language: language}, nil
 }
 
 // NewTestBot creates a gotgbot.Bot that points at the provided mock server.
@@ -69,7 +95,7 @@ func SetupBotAndDispatcherWithTelegraph(t *testing.T, fakeAPI *FakeTweetAPI, tel
 		},
 	})
 
-	handlers.RegisterWithFetcher(dispatcher, logger.New(true), fakeAPI, telegraph)
+	handlers.RegisterWithFetcher(dispatcher, logger.New(true), fakeAPI, telegraph, &FakeChatSettings{})
 
 	return bot, mock, dispatcher
 }

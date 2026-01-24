@@ -3,12 +3,17 @@ package app
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 )
 
 // TestNewBot_UsesConfiguredTelegramAPIURL verifies that when TELEGRAM_API_URL is set,
 // the bot client will attempt to use that URL for API calls.
 func TestNewBot_UsesConfiguredTelegramAPIURL(t *testing.T) {
+	if os.Getenv("DATABASE_URL") == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+
 	called := false
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
@@ -27,10 +32,11 @@ func TestNewBot_UsesConfiguredTelegramAPIURL(t *testing.T) {
 	t.Setenv("TELEGRAM_API_URL", mockServer.URL)
 	t.Setenv("TWITTERX_API_URL", "http://127.0.0.1:8080")
 
-	bot, updater, logger, err := NewBot()
+	bot, updater, logger, db, err := NewBot()
 	if err != nil {
 		t.Fatalf("NewBot() error = %v", err)
 	}
+	defer db.Close()
 
 	if bot == nil {
 		t.Fatal("bot is nil")
@@ -40,6 +46,9 @@ func TestNewBot_UsesConfiguredTelegramAPIURL(t *testing.T) {
 	}
 	if logger == nil {
 		t.Fatal("logger is nil")
+	}
+	if db == nil {
+		t.Fatal("db is nil")
 	}
 
 	if !called {
@@ -56,7 +65,7 @@ func TestNewBot_RequiresBotToken(t *testing.T) {
 	t.Setenv("BOT_TOKEN", "")
 	t.Setenv("DEBUG", "false")
 
-	_, _, _, err := NewBot()
+	_, _, _, _, err := NewBot()
 	if err == nil {
 		t.Fatal("expected error when BOT_TOKEN is empty")
 	}

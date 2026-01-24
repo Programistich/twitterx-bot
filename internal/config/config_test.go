@@ -7,6 +7,7 @@ func TestLoad_TelegramAPIURL_DefaultEmpty(t *testing.T) {
 	t.Setenv("DEBUG", "false")
 	t.Setenv("TELEGRAM_API_URL", "")
 	t.Setenv("TWITTERX_API_URL", "http://localhost:8080")
+	t.Setenv("DATABASE_URL", "postgres://test:test@localhost/test")
 
 	cfg, err := Load()
 	if err != nil {
@@ -23,6 +24,7 @@ func TestLoad_TelegramAPIURL_TrimSpacesAndSlash(t *testing.T) {
 	t.Setenv("DEBUG", "false")
 	t.Setenv("TELEGRAM_API_URL", "  http://127.0.0.1:9999/  ")
 	t.Setenv("TWITTERX_API_URL", "http://localhost:8080")
+	t.Setenv("DATABASE_URL", "postgres://test:test@localhost/test")
 
 	cfg, err := Load()
 	if err != nil {
