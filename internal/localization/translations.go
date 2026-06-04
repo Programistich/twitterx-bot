@@ -39,6 +39,7 @@ Example:
 		KeyFrom:                " from %s",
 		KeyBy:                  " by %s",
 		KeyLinkFallback:        "%s",
+		KeyTranslation:         "🔁 Translation",
 	},
 	database.LangUkrainian: {
 		KeyHelpText: `<b>TwitterX Бот</b>
@@ -75,6 +76,7 @@ Example:
 		KeyFrom:                " від %s",
 		KeyBy:                  " від %s",
 		KeyLinkFallback:        "%s",
+		KeyTranslation:         "🔁 Переклад",
 	},
 	database.LangRussian: {
 		KeyHelpText: `<b>TwitterX Бот</b>
@@ -111,6 +113,7 @@ Example:
 		KeyFrom:                " от %s",
 		KeyBy:                  " от %s",
 		KeyLinkFallback:        "%s",
+		KeyTranslation:         "🔁 Перевод",
 	},
 }
 

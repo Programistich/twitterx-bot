@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html"
+	"strings"
 
 	"github.com/PaulSonOfLars/gotgbot/v2"
 	"github.com/PaulSonOfLars/gotgbot/v2/ext"
@@ -11,6 +13,7 @@ import (
 	"twitterx-bot/internal/chain"
 	"twitterx-bot/internal/localization"
 	"twitterx-bot/internal/logger"
+	"twitterx-bot/internal/translation"
 	"twitterx-bot/internal/twitterxapi"
 )
 
@@ -37,8 +40,9 @@ type VideoChecker interface {
 type Sender struct {
 	Bot          BotAPI
 	Formatter    Formatter
-	Telegraph    ArticleCreator // Optional: for creating articles when text is too long
-	VideoChecker VideoChecker   // Optional: for checking video size before sending
+	Telegraph    ArticleCreator         // Optional: for creating articles when text is too long
+	VideoChecker VideoChecker           // Optional: for checking video size before sending
+	Translator   translation.Translator // Optional: for auto-translating tweet text into Lang
 	Log          *logger.Logger
 	Lang         string // Language for localization
 }
@@ -115,7 +119,17 @@ type sendTweetMessageOpts struct {
 
 // sendTweetMessage sends a tweet as a Telegram message and returns the sent message.
 // This helper is used for both single tweet responses and chain threading.
+// After the primary message is sent it optionally sends a translation reply.
 func (s Sender) sendTweetMessage(chatID int64, tweet *twitterxapi.Tweet, opts *sendTweetMessageOpts) (*gotgbot.Message, error) {
+	msg, err := s.sendPrimaryMessage(chatID, tweet, opts)
+	if err == nil && msg != nil {
+		s.sendTranslation(chatID, msg, tweet)
+	}
+	return msg, err
+}
+
+// sendPrimaryMessage sends the tweet content (video/photo/text) and returns the sent message.
+func (s Sender) sendPrimaryMessage(chatID int64, tweet *twitterxapi.Tweet, opts *sendTweetMessageOpts) (*gotgbot.Message, error) {
 	if s.Bot == nil {
 		return nil, errors.New("tweet sender: bot is nil")
 	}
@@ -297,6 +311,56 @@ func (s Sender) fallbackCaption(tweet *twitterxapi.Tweet, requesterUsername stri
 	}
 
 	return TruncateHTML(caption, MaxCaptionLength)
+}
+
+// sendTranslation translates the tweet text into the configured language and
+// sends it as a reply to the primary tweet message. It is best-effort: any
+// failure is logged and ignored so it never affects the primary tweet send.
+func (s Sender) sendTranslation(chatID int64, replyTo *gotgbot.Message, tweet *twitterxapi.Tweet) {
+	if s.Translator == nil || replyTo == nil || tweet == nil {
+		return
+	}
+	text := strings.TrimSpace(tweet.Text)
+	if text == "" {
+		return
+	}
+
+	log := s.log().With("component", "tweet_translation", "chat_id", chatID, "tweet_id", tweet.ID)
+
+	target := translation.LanguageFromISO(s.Lang)
+	tr, err := s.Translator.Translate(context.Background(), text, target)
+	if err != nil {
+		log.Warn("translate tweet failed", "err", err)
+		return
+	}
+	if tr == nil {
+		return
+	}
+
+	translated := strings.TrimSpace(tr.Text)
+	// Skip when there is nothing useful to add: empty result, already in the
+	// target language, or identical to the original text.
+	if translated == "" || strings.EqualFold(tr.From.ISO, target.ISO) || translated == text {
+		log.Debug("translation skipped", "source_lang", tr.From.ISO, "target_lang", target.ISO)
+		return
+	}
+
+	header := localization.Get(s.Lang, localization.KeyTranslation)
+	truncated := TruncateText(translated, MaxMessageLength-len(header)-8)
+	body := fmt.Sprintf("<b>%s</b>\n\n%s", html.EscapeString(header), html.EscapeString(truncated))
+
+	if _, err := s.Bot.SendMessage(chatID, body, &gotgbot.SendMessageOpts{
+		ParseMode: "HTML",
+		ReplyParameters: &gotgbot.ReplyParameters{
+			MessageId:                replyTo.MessageId,
+			AllowSendingWithoutReply: true,
+		},
+		LinkPreviewOptions: &gotgbot.LinkPreviewOptions{IsDisabled: true},
+	}); err != nil {
+		log.Warn("send translation failed", "err", err)
+		return
+	}
+	log.Info("translation sent", "source_lang", tr.From.ISO, "target_lang", target.ISO)
 }
 
 // SendChainResponseOpts contains options for SendChainResponse.
