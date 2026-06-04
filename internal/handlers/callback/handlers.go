@@ -12,6 +12,7 @@ import (
 	"twitterx-bot/internal/localization"
 	"twitterx-bot/internal/logger"
 	"twitterx-bot/internal/telegram/tweet"
+	"twitterx-bot/internal/translation"
 	"twitterx-bot/internal/usecase/tweetsvc/sendchain"
 )
 
@@ -33,11 +34,12 @@ type Handlers struct {
 	chainTimeout time.Duration
 	telegraph    tweet.ArticleCreator
 	chatSettings ChatSettingsProvider
+	translator   translation.Translator
 }
 
 // New creates callback handlers with the configured logger, tweet fetcher, and chain timeout.
-func New(log *logger.Logger, fetcher TweetFetcher, chainTimeout time.Duration, telegraph tweet.ArticleCreator, chatSettings ChatSettingsProvider) *Handlers {
-	return &Handlers{log: log, fetcher: fetcher, chainTimeout: chainTimeout, telegraph: telegraph, chatSettings: chatSettings}
+func New(log *logger.Logger, fetcher TweetFetcher, chainTimeout time.Duration, telegraph tweet.ArticleCreator, chatSettings ChatSettingsProvider, translator translation.Translator) *Handlers {
+	return &Handlers{log: log, fetcher: fetcher, chainTimeout: chainTimeout, telegraph: telegraph, chatSettings: chatSettings, translator: translator}
 }
 
 // Chain processes callback queries that request a tweet chain.
@@ -86,7 +88,7 @@ func (h *Handlers) Chain(b *gotgbot.Bot, ctx *ext.Context) error {
 	reqCtx, cancel := context.WithTimeout(context.Background(), h.chainTimeout)
 	defer cancel()
 
-	uc := sendchain.New(h.fetcher, tweet.Sender{Bot: b, Telegraph: h.telegraph, Log: log, Lang: lang})
+	uc := sendchain.New(h.fetcher, tweet.Sender{Bot: b, Telegraph: h.telegraph, Translator: h.translator, Log: log, Lang: lang})
 	if sendErr := uc.SendChain(reqCtx, chatID, replyToMsgID, username, tweetID, shared.UserDisplayName(&cb.From)); sendErr != nil {
 		log.Error("send chain failed", "err", sendErr)
 		return nil

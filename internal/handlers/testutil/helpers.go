@@ -14,6 +14,7 @@ import (
 	"twitterx-bot/internal/handlers"
 	"twitterx-bot/internal/logger"
 	"twitterx-bot/internal/telegram/tweet"
+	"twitterx-bot/internal/translation"
 	"twitterx-bot/internal/twitterxapi"
 	testtelegram "twitterx-bot/pkg/testutil/telegram"
 )
@@ -57,6 +58,25 @@ func (f *FakeChatSettings) UpdateLanguage(_ context.Context, chatID int64, langu
 	return &database.ChatSettings{ChatID: chatID, Language: language}, nil
 }
 
+// FakeTranslator is a minimal fake for testing that returns a configured translation.
+type FakeTranslator struct {
+	Result *translation.Translation
+	Err    error
+	Calls  []string
+}
+
+// Translate records the request and returns the configured result or error.
+func (f *FakeTranslator) Translate(_ context.Context, text string, to translation.Language) (*translation.Translation, error) {
+	f.Calls = append(f.Calls, text)
+	if f.Err != nil {
+		return nil, f.Err
+	}
+	if f.Result != nil {
+		return f.Result, nil
+	}
+	return &translation.Translation{From: translation.Language{ISO: "en"}, To: to, Text: text}, nil
+}
+
 // NewTestBot creates a gotgbot.Bot that points at the provided mock server.
 func NewTestBot(t *testing.T, mock *testtelegram.MockServer) *gotgbot.Bot {
 	t.Helper()
@@ -95,7 +115,7 @@ func SetupBotAndDispatcherWithTelegraph(t *testing.T, fakeAPI *FakeTweetAPI, tel
 		},
 	})
 
-	handlers.RegisterWithFetcher(dispatcher, logger.New(true), fakeAPI, telegraph, &FakeChatSettings{})
+	handlers.RegisterWithFetcher(dispatcher, logger.New(true), fakeAPI, telegraph, &FakeChatSettings{}, nil)
 
 	return bot, mock, dispatcher
 }

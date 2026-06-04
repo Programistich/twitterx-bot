@@ -17,6 +17,7 @@ import (
 	"twitterx-bot/internal/handlers"
 	"twitterx-bot/internal/logger"
 	"twitterx-bot/internal/telegraph"
+	"twitterx-bot/internal/translation"
 	"twitterx-bot/internal/twitterxapi"
 )
 
@@ -91,7 +92,12 @@ func NewBot() (*gotgbot.Bot, *ext.Updater, *logger.Logger, *database.DB, error) 
 
 	chatSettingsRepo := database.NewChatSettingsRepository(db)
 	apiClient := twitterxapi.NewClient(cfg.TwitterXAPIURL)
-	handlers.Register(dispatcher, l, apiClient, telegraphService, chatSettingsRepo)
+
+	// Initialize translation service for auto-translating tweet text into the chat language.
+	translationService := translation.NewService(&http.Client{Timeout: 10 * time.Second}, "")
+	log.Info("translation integration enabled")
+
+	handlers.Register(dispatcher, l, apiClient, telegraphService, chatSettingsRepo, translationService)
 
 	return bot, updater, l, db, nil
 }

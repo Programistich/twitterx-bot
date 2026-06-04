@@ -17,6 +17,7 @@ import (
 	"twitterx-bot/internal/handlers/start"
 	"twitterx-bot/internal/logger"
 	"twitterx-bot/internal/telegram/tweet"
+	"twitterx-bot/internal/translation"
 	"twitterx-bot/internal/twitterurl"
 	"twitterx-bot/internal/twitterxapi"
 	inlineuc "twitterx-bot/internal/usecase/tweetsvc/inline"
@@ -39,16 +40,16 @@ type ChatSettingsProvider interface {
 	UpdateLanguage(ctx context.Context, chatID int64, language string) (*database.ChatSettings, error)
 }
 
-func Register(d *ext.Dispatcher, log *logger.Logger, api *twitterxapi.Client, telegraph tweet.ArticleCreator, chatSettings ChatSettingsProvider) {
+func Register(d *ext.Dispatcher, log *logger.Logger, api *twitterxapi.Client, telegraph tweet.ArticleCreator, chatSettings ChatSettingsProvider, translator translation.Translator) {
 	if api == nil {
 		api = twitterxapi.NewClient("")
 	}
-	RegisterWithFetcher(d, log, api, telegraph, chatSettings)
+	RegisterWithFetcher(d, log, api, telegraph, chatSettings, translator)
 }
 
 // RegisterWithFetcher registers handlers using a custom TweetFetcher implementation.
 // This is useful for testing with mock implementations.
-func RegisterWithFetcher(d *ext.Dispatcher, log *logger.Logger, fetcher TweetFetcher, telegraph tweet.ArticleCreator, chatSettings ChatSettingsProvider) {
+func RegisterWithFetcher(d *ext.Dispatcher, log *logger.Logger, fetcher TweetFetcher, telegraph tweet.ArticleCreator, chatSettings ChatSettingsProvider, translator translation.Translator) {
 	// Start and help commands
 	startHandler := start.New(log, chatSettings)
 	d.AddHandler(handlers.NewCommand("start", startHandler.Handle))
@@ -72,7 +73,7 @@ func RegisterWithFetcher(d *ext.Dispatcher, log *logger.Logger, fetcher TweetFet
 	}, inlineHandler.Handle))
 
 	// Message handler for Twitter URLs
-	messageHandler := message.New(log, fetcher, messageTimeout, telegraph, chatSettings)
+	messageHandler := message.New(log, fetcher, messageTimeout, telegraph, chatSettings, translator)
 	d.AddHandler(handlers.NewMessage(func(msg *gotgbot.Message) bool {
 		if msg.Text == "" {
 			return false
@@ -82,7 +83,7 @@ func RegisterWithFetcher(d *ext.Dispatcher, log *logger.Logger, fetcher TweetFet
 	}, messageHandler.Handle))
 
 	// Callback handlers
-	callbackHandlers := callback.New(log, fetcher, chainTimeout, telegraph, chatSettings)
+	callbackHandlers := callback.New(log, fetcher, chainTimeout, telegraph, chatSettings, translator)
 	d.AddHandler(handlers.NewCallback(func(cq *gotgbot.CallbackQuery) bool {
 		return strings.HasPrefix(cq.Data, tweet.ChainCallbackPrefix)
 	}, callbackHandlers.Chain))

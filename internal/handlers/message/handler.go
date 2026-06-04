@@ -12,6 +12,7 @@ import (
 	"twitterx-bot/internal/handlers/shared"
 	"twitterx-bot/internal/logger"
 	"twitterx-bot/internal/telegram/tweet"
+	"twitterx-bot/internal/translation"
 	"twitterx-bot/internal/twitterurl"
 	"twitterx-bot/internal/usecase/tweetsvc/sendtweet"
 )
@@ -34,11 +35,12 @@ type Handler struct {
 	timeout      time.Duration
 	telegraph    tweet.ArticleCreator
 	chatSettings ChatSettingsProvider
+	translator   translation.Translator
 }
 
 // New creates a new message handler with the supplied logger, tweet fetcher, and timeout.
-func New(log *logger.Logger, fetcher TweetFetcher, timeout time.Duration, telegraph tweet.ArticleCreator, chatSettings ChatSettingsProvider) *Handler {
-	return &Handler{log: log, fetcher: fetcher, timeout: timeout, telegraph: telegraph, chatSettings: chatSettings}
+func New(log *logger.Logger, fetcher TweetFetcher, timeout time.Duration, telegraph tweet.ArticleCreator, chatSettings ChatSettingsProvider, translator translation.Translator) *Handler {
+	return &Handler{log: log, fetcher: fetcher, timeout: timeout, telegraph: telegraph, chatSettings: chatSettings, translator: translator}
 }
 
 // Handle processes incoming Telegram messages that contain Twitter URLs.
@@ -80,7 +82,7 @@ func (h *Handler) Handle(b *gotgbot.Bot, ctx *ext.Context) error {
 		}
 	}
 
-	sender := tweet.Sender{Bot: b, Telegraph: h.telegraph, Log: log, Lang: lang}
+	sender := tweet.Sender{Bot: b, Telegraph: h.telegraph, Translator: h.translator, Log: log, Lang: lang}
 	uc := sendtweet.NewWithChain(h.fetcher, sender, sender)
 	if sendErr := uc.SendTweet(reqCtx, ctx.EffectiveChat.Id, ctx.EffectiveMessage.MessageId, username, tweetID, shared.UserDisplayName(ctx.EffectiveUser), lang); sendErr != nil {
 		log.Error("send tweet failed", "tweet_username", username, "tweet_id", tweetID, "err", sendErr)

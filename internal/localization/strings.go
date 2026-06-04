@@ -18,7 +18,7 @@ const (
 	KeyDeleted             StringKey = "deleted"
 
 	// Error messages
-	KeyInvalidLanguage    StringKey = "invalid_language"
+	KeyInvalidLanguage     StringKey = "invalid_language"
 	KeyErrorSavingLanguage StringKey = "error_saving_language"
 
 	// Button texts
@@ -36,4 +36,7 @@ const (
 	KeyFrom         StringKey = "from"
 	KeyBy           StringKey = "by"
 	KeyLinkFallback StringKey = "link_fallback"
+
+	// Translation
+	KeyTranslation StringKey = "translation"
 )
