@@ -38,5 +38,5 @@ jobs:
             set -euo pipefail
             cd ${{ secrets.DEPLOY_PATH }}
             git pull origin main
-            docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml up -d --build
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
             docker image prune -f
